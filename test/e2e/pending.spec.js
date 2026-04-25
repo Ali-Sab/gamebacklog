@@ -1,23 +1,21 @@
 "use strict";
 
-const fs   = require("fs");
-const path = require("path");
 const { test, expect } = require("@playwright/test");
 const { DATA_DIR } = require("./constants");
 
+// Open a direct SQLite connection to the test DB for seeding/clearing state
+process.env.DATA_DIR = DATA_DIR;
+const { readJSON, writeJSON } = require("../../db");
+
 async function injectPending(page, item) {
-  const fp = path.join(DATA_DIR, "pending.json");
-  const existing = JSON.parse(fs.readFileSync(fp, "utf8"));
-  existing.push(item);
-  fs.writeFileSync(fp, JSON.stringify(existing, null, 2));
-  // Trigger a refresh in the browser
+  const existing = readJSON("pending.json", []);
+  writeJSON("pending.json", [...existing, item]);
   await page.evaluate(() => typeof loadPending === "function" && loadPending());
   await page.waitForTimeout(300);
 }
 
 test.beforeEach(async ({ page }) => {
-  // Clear pending queue before each test
-  fs.writeFileSync(path.join(DATA_DIR, "pending.json"), "[]");
+  writeJSON("pending.json", []);
 
   await page.goto("/");
   await page.waitForSelector("#screen-main:not(.hidden)");
@@ -70,9 +68,10 @@ test("pending card is rendered for a game_move suggestion", async ({ page }) => 
 
 test("approve button calls approve endpoint and removes card", async ({ page }) => {
   // Seed a game so approve can actually move it
-  const token = await page.evaluate(() => window.accessToken);
+  const refreshRes = await page.request.post("/api/auth/refresh");
+  const { accessToken } = await refreshRes.json();
   await page.request.post("/api/data", {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${accessToken}` },
     data: {
       games: {
         queue: [{ id: "hk-01", title: "Hollow Knight", mode: "atmospheric", risk: "", hours: "40", note: "" }],
@@ -94,7 +93,7 @@ test("approve button calls approve endpoint and removes card", async ({ page }) 
   await page.evaluate(() => typeof loadPending === "function" && loadPending());
   await page.waitForTimeout(500);
 
-  await page.click("button:has-text('Approve')");
+  await page.locator(".pending-card button:has-text('Approve')").click();
   await page.waitForTimeout(500);
 
   // Card should be gone
@@ -180,14 +179,6 @@ test("two suggestions for the same game show only one card", async ({ page }) =>
 
 test("MCP dedup: second suggestion for same game replaces first in pending.json", async ({ page }) => {
   const { execTool } = require("../../mcp-server");
-  const path = require("path");
-
-  const readJSON = (f, d) => {
-    try { return JSON.parse(require("fs").readFileSync(path.join(DATA_DIR, f), "utf8")); } catch { return d; }
-  };
-  const writeJSON = (f, d) => {
-    require("fs").writeFileSync(path.join(DATA_DIR, f), JSON.stringify(d, null, 2));
-  };
 
   // First suggestion
   await execTool("suggest_game_move", {

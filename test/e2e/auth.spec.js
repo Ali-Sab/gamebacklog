@@ -65,13 +65,22 @@ test("full login flow lands on main app", async ({ page }) => {
   await expect(page.locator("#screen-main")).toBeVisible({ timeout: 10000 });
 });
 
-// Logout needs to start authenticated — override the no-auth storageState for this test
+// Logout test does its own fresh login so it doesn't revoke the shared storageState token
 test.describe("authenticated logout", () => {
-  const { AUTH_STATE_FILE } = require("./constants");
-  test.use({ storageState: AUTH_STATE_FILE });
-
   test("logout clears session and shows login screen", async ({ page }) => {
     await page.goto(`http://localhost:${PORT}`);
+    await page.waitForSelector("#screen-login:not(.hidden)");
+    await page.fill("#login-username", USERNAME);
+    await page.fill("#login-password", PASSWORD);
+    await page.click("#login-step1 .btn-gold");
+    await page.waitForSelector("#login-totp");
+    await page.fill("#login-totp", computeTOTP(TOTP_SECRET));
+    await page.click("#login-step2 .btn-gold");
+    const err = page.locator("#login-error2:not(.hidden)");
+    if (await err.isVisible({ timeout: 1500 }).catch(() => false)) {
+      await page.fill("#login-totp", computeTOTP(TOTP_SECRET, 1));
+      await page.click("#login-step2 .btn-gold");
+    }
     await page.waitForSelector("#screen-main:not(.hidden)", { timeout: 10000 });
     await page.click("button[data-tab='settings']");
     await page.click("text=Log Out + Clear Session");

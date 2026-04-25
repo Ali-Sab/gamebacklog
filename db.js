@@ -10,16 +10,20 @@ const db = new Database(DB_PATH);
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 
+// Migrate existing databases that predate the played_date column
+try { db.exec("ALTER TABLE games ADD COLUMN played_date TEXT"); } catch {}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS games (
-    id       TEXT PRIMARY KEY,
-    title    TEXT NOT NULL,
-    category TEXT NOT NULL,
-    rank     INTEGER,
-    mode     TEXT,
-    risk     TEXT,
-    hours    TEXT,
-    note     TEXT
+    id          TEXT PRIMARY KEY,
+    title       TEXT NOT NULL,
+    category    TEXT NOT NULL,
+    rank        INTEGER,
+    mode        TEXT,
+    risk        TEXT,
+    hours       TEXT,
+    note        TEXT,
+    played_date TEXT
   );
 
   CREATE TABLE IF NOT EXISTS profile (
@@ -61,25 +65,33 @@ db.exec(`
 
 // ─── Games ────────────────────────────────────────────────────────────────────
 
+const ALL_CATS = ['queue', 'caveats', 'decompression', 'yourCall', 'played'];
+
 function readGames() {
   const rows = db.prepare("SELECT * FROM games").all();
-  const result = {};
+  if (rows.length === 0) return null;
+  const result = Object.fromEntries(ALL_CATS.map(c => [c, []]));
   for (const row of rows) {
     if (!result[row.category]) result[row.category] = [];
-    result[row.category].push({
-      id: row.id, title: row.title, rank: row.rank,
-      mode: row.mode, risk: row.risk, hours: row.hours, note: row.note,
-    });
+    const g = { id: row.id, title: row.title };
+    if (row.rank        != null) g.rank       = row.rank;
+    if (row.mode        != null) g.mode       = row.mode;
+    if (row.risk        != null) g.risk       = row.risk;
+    if (row.hours       != null) g.hours      = row.hours;
+    if (row.note        != null) g.note       = row.note;
+    if (row.played_date != null) g.playedDate = row.played_date;
+    result[row.category].push(g);
   }
   return result;
 }
 
 const upsertGame = db.prepare(`
-  INSERT INTO games (id, title, category, rank, mode, risk, hours, note)
-  VALUES (@id, @title, @category, @rank, @mode, @risk, @hours, @note)
+  INSERT INTO games (id, title, category, rank, mode, risk, hours, note, played_date)
+  VALUES (@id, @title, @category, @rank, @mode, @risk, @hours, @note, @played_date)
   ON CONFLICT(id) DO UPDATE SET
     title=excluded.title, category=excluded.category, rank=excluded.rank,
-    mode=excluded.mode, risk=excluded.risk, hours=excluded.hours, note=excluded.note
+    mode=excluded.mode, risk=excluded.risk, hours=excluded.hours, note=excluded.note,
+    played_date=excluded.played_date
 `);
 
 const deleteGame = db.prepare("DELETE FROM games WHERE id = ?");
@@ -94,6 +106,7 @@ function writeGames(gamesObj) {
           id: g.id, title: g.title, category,
           rank: g.rank ?? null, mode: g.mode ?? null,
           risk: g.risk ?? null, hours: g.hours ?? null, note: g.note ?? null,
+          played_date: g.playedDate ?? null,
         });
       }
     }
@@ -105,7 +118,7 @@ function writeGames(gamesObj) {
 
 function readProfile() {
   const row = db.prepare("SELECT content FROM profile WHERE id = 1").get();
-  return row ? row.content : "";
+  return row ? row.content : null;
 }
 
 function writeProfile(content) {

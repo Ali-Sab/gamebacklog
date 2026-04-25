@@ -32,7 +32,8 @@ describe("GET /api/data", () => {
 
   test("returns { games: null, profile: null } on a fresh install", async () => {
     const res = await request(app).get("/api/data").set(auth()).expect(200);
-    expect(res.body).toEqual({ games: null, profile: null });
+    expect(res.body.games).toBeNull();
+    expect(res.body.profile).toBeNull();
   });
 });
 

@@ -130,6 +130,23 @@
   .legend-item { display: flex; align-items: center; gap: 5px; }
   .legend-dot { width: 7px; height: 7px; border-radius: 50%; }
   .legend-label { font-size: 12px; color: var(--muted); }
+
+  /* Global search */
+  .global-search-wrap { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .global-search-input { background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 12px; padding: 6px 12px; border-radius: 2px; width: 280px; }
+  .global-search-input:focus { border-color: var(--border2); outline: none; }
+  .global-results-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .global-results-header span { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .cat-badge { display: inline-block; font-family: var(--mono); font-size: 8px; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 6px; border-radius: 2px; white-space: nowrap; }
+
+  /* Note editing */
+  .note-edit-wrap { display: flex; flex-direction: column; gap: 4px; }
+  .note-textarea { width: 100%; min-height: 64px; background: var(--surface); border: 1px solid var(--border2); color: var(--text); font-size: 11px; font-family: var(--font); line-height: 1.55; padding: 5px 8px; border-radius: 2px; resize: vertical; }
+  .note-textarea:focus { outline: none; border-color: var(--gold); }
+  .game-note-editable { cursor: pointer; }
+  .game-note-editable:hover { color: var(--sub) !important; }
+  .rank-btn { font-family: var(--mono); font-size: 10px; padding: 1px 5px; border-radius: 2px; border: 1px solid var(--border2); color: var(--muted); background: transparent; cursor: pointer; line-height: 1.4; }
+  .rank-btn:hover { color: var(--text); border-color: var(--sub); }
 </style>
 </head>
 <body>
@@ -221,18 +238,27 @@
     <div class="content">
       <!-- GAMES TAB -->
       <div class="tab-pane active" id="tab-games">
-        <div class="cat-tabs">
-          <button class="cat-btn active" data-cat="queue"         onclick="switchCat('queue')">Play Queue <span id="cnt-queue"></span></button>
-          <button class="cat-btn"        data-cat="caveats"       onclick="switchCat('caveats')">With Caveats <span id="cnt-caveats"></span></button>
-          <button class="cat-btn"        data-cat="decompression" onclick="switchCat('decompression')">Decompression <span id="cnt-decompression"></span></button>
-          <button class="cat-btn"        data-cat="yourCall"      onclick="switchCat('yourCall')">Your Call <span id="cnt-yourCall"></span></button>
-          <button class="cat-btn"        data-cat="played"        onclick="switchCat('played')">Played <span id="cnt-played"></span></button>
-          <span class="cat-meta" id="queue-hours-meta"></span>
+        <div class="global-search-wrap">
+          <input class="global-search-input" id="global-search" placeholder="Search all categories…" oninput="onGlobalSearch(this.value)">
+          <button class="btn btn-ghost btn-sm" id="global-clear-btn" onclick="clearGlobalSearch()" style="display:none;">✕ Clear</button>
         </div>
-        <div class="filters" id="game-filters">
-          <input class="search-input" id="game-search" placeholder="Search..." oninput="renderGames()">
-          <span id="mode-filters"></span>
-          <span id="risk-filters"></span>
+        <div id="normal-games-view">
+          <div class="cat-tabs">
+            <button class="cat-btn active" data-cat="queue"         onclick="switchCat('queue')">Play Queue <span id="cnt-queue"></span></button>
+            <button class="cat-btn"        data-cat="caveats"       onclick="switchCat('caveats')">With Caveats <span id="cnt-caveats"></span></button>
+            <button class="cat-btn"        data-cat="decompression" onclick="switchCat('decompression')">Decompression <span id="cnt-decompression"></span></button>
+            <button class="cat-btn"        data-cat="yourCall"      onclick="switchCat('yourCall')">Your Call <span id="cnt-yourCall"></span></button>
+            <button class="cat-btn"        data-cat="played"        onclick="switchCat('played')">Played <span id="cnt-played"></span></button>
+            <span class="cat-meta" id="queue-hours-meta"></span>
+          </div>
+          <div class="filters" id="game-filters">
+            <input class="search-input" id="game-search" placeholder="Search this list…" oninput="renderGames()">
+            <span id="mode-filters"></span>
+            <span id="risk-filters"></span>
+          </div>
+        </div>
+        <div id="global-results-header" class="global-results-header hidden">
+          <span id="global-results-label"></span>
         </div>
         <div class="game-table" id="game-table"></div>
         <div class="legend" id="game-legend"></div>
@@ -395,6 +421,10 @@ let pendingItems = [];
 let pendingPollTimer = null;
 let profileEditing = false;
 let historyVisible = false;
+let editingNote = null;
+let globalSearchQuery = '';
+
+applyTheme(localStorage.getItem('theme') || 'void');
 
 applyTheme(localStorage.getItem('theme') || 'void');
 
@@ -564,8 +594,9 @@ function switchTab(tab) {
 }
 
 function switchCat(cat) {
-  activeCat = cat; modeFilter = null; riskFilter = null;
+  activeCat = cat; modeFilter = null; riskFilter = null; editingNote = null;
   document.querySelectorAll('.cat-btn').forEach(b => b.classList.toggle('active', b.dataset.cat === cat));
+  renderFilters();
   renderGames();
 }
 
@@ -611,7 +642,7 @@ function updateMeta() {
 }
 
 function renderFilters() {
-  const showMode = activeCat === 'queue' || activeCat === 'caveats';
+  const showMode = activeCat !== 'played';
   const showRisk = activeCat === 'caveats';
   const mf = document.getElementById('mode-filters');
   const rf = document.getElementById('risk-filters');
@@ -630,17 +661,19 @@ function renderFilters() {
 function toggleMode(k) { modeFilter = modeFilter===k ? null : k; renderFilters(); renderGames(); }
 function toggleRisk(r) { riskFilter = riskFilter===r ? null : r; renderFilters(); renderGames(); }
 
+const CAT_COLORS = { queue:'#7eb8d4', caveats:'#e8c547', decompression:'#b8d47e', yourCall:'#e8a87c', played:'#a8a8a8' };
+
 function renderGames() {
   const search = (document.getElementById('game-search')?.value||'').toLowerCase();
   const sorted = [...(appGames[activeCat]||[])].sort((a,b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
   const list = sorted.filter(g => {
-    if (search && !g.title.toLowerCase().includes(search)) return false;
+    if (search && !g.title.toLowerCase().includes(search) && !(g.note||'').toLowerCase().includes(search)) return false;
     if (modeFilter && g.mode !== modeFilter) return false;
     if (riskFilter && g.risk !== riskFilter) return false;
     return true;
   });
 
-  const cols = '32px 220px 54px 100px 1fr 90px';
+  const cols = '32px 1fr 54px 100px 1.6fr 110px';
   const headers = ['#','Game','Hours','Mode','Notes',''];
 
   const table = document.getElementById('game-table');
@@ -657,6 +690,16 @@ function renderGames() {
     ${list.map((g,i) => {
       const modeColor = tagColor(MODES, MODES_LIGHT, g.mode);
       const riskColor = g.risk ? tagColor(RISK_COLORS, RISK_COLORS_LIGHT, g.risk) : '';
+      const isEditing = editingNote && editingNote.id === g.id && editingNote.cat === activeCat;
+      const noteHtml = isEditing
+        ? `<div class="note-edit-wrap">
+             <textarea class="note-textarea" id="note-edit-ta" onkeydown="noteKeydown(event,'${g.id}','${activeCat}')">${esc(g.note||'')}</textarea>
+             <div style="display:flex;gap:5px;">
+               <button class="action-btn action-played" onclick="saveNote('${g.id}','${activeCat}')">Save</button>
+               <button class="action-btn" style="color:var(--muted);border-color:var(--border2);" onclick="cancelNote()">Cancel</button>
+             </div>
+           </div>`
+        : `<div class="game-note game-note-editable" onclick="startEditNote('${g.id}','${activeCat}')" title="Click to edit">${g.note ? esc(g.note) : '<span style="opacity:0.25;font-style:normal;">add note…</span>'}</div>`;
       return `
         <div class="game-row" style="grid-template-columns:${cols}">
           <div class="game-rank${i<5?' top':''}">${String(i+1).padStart(2,'0')}</div>
@@ -669,15 +712,24 @@ function renderGames() {
             ${g.mode ? `<div><span class="tag" style="${tagStyle(modeColor)}">${g.mode}</span></div>` : ''}
             ${g.risk ? `<div><span class="tag" style="${tagStyle(riskColor)}">${g.risk} risk</span></div>` : ''}
           </div>
-          <div class="game-note">${esc(g.note||'')}</div>
-          <div class="game-actions">
+          ${noteHtml}
+          <div class="game-actions" style="align-items:center;">
+            <div style="display:flex;gap:3px;">
+              <button class="rank-btn" onclick="moveRank('${g.id}','${activeCat}',-1)" title="Move up">↑</button>
+              <button class="rank-btn" onclick="moveRank('${g.id}','${activeCat}',1)" title="Move down">↓</button>
+            </div>
             ${activeCat !== 'played' ? `<button class="action-btn action-played" onclick="markPlayed('${g.id}','${activeCat}')">✓ Played</button>` : ''}
             <select onchange="moveGame('${g.id}','${activeCat}',this.value);this.value='${activeCat}'">
-              ${cats.map(c => `<option value="${c}"${c===activeCat?' selected':''}>${CAT_LABELS[c]}</option>`).join('')}
+              ${cats.filter(c => c !== 'played').map(c => `<option value="${c}"${c===activeCat?' selected':''}>${CAT_LABELS[c]}</option>`).join('')}
             </select>
           </div>
         </div>`;
     }).join('')}`;
+
+  if (editingNote) {
+    const ta = document.getElementById('note-edit-ta');
+    if (ta) { ta.focus(); ta.selectionStart = ta.selectionEnd = ta.value.length; }
+  }
 
   // Legend
   const legend = document.getElementById('game-legend');
@@ -688,6 +740,119 @@ function renderGames() {
     const c = tagColor(RISK_COLORS, RISK_COLORS_LIGHT, r);
     return `<div class="legend-item"><div class="legend-dot" style="background:${c}"></div><span class="legend-label">${r} risk</span></div>`;
   }).join('') : '');
+}
+
+// ── Global search ────────────────────────────────────────────
+function onGlobalSearch(val) {
+  globalSearchQuery = val.trim().toLowerCase();
+  const clearBtn = document.getElementById('global-clear-btn');
+  const normalView = document.getElementById('normal-games-view');
+  const resultsHeader = document.getElementById('global-results-header');
+  if (!globalSearchQuery) {
+    clearBtn.style.display = 'none';
+    normalView.classList.remove('hidden');
+    resultsHeader.classList.add('hidden');
+    document.getElementById('game-legend').innerHTML = '';
+    renderGames();
+    return;
+  }
+  clearBtn.style.display = '';
+  normalView.classList.add('hidden');
+  resultsHeader.classList.remove('hidden');
+  renderGlobalResults();
+}
+
+function clearGlobalSearch() {
+  document.getElementById('global-search').value = '';
+  onGlobalSearch('');
+}
+
+function renderGlobalResults() {
+  const q = globalSearchQuery;
+  const results = [];
+  Object.entries(appGames).forEach(([cat, games]) => {
+    (games||[]).forEach(g => {
+      if (g.title.toLowerCase().includes(q) || (g.note||'').toLowerCase().includes(q))
+        results.push({...g, _cat: cat});
+    });
+  });
+
+  document.getElementById('global-results-label').textContent =
+    `${results.length} result${results.length===1?'':'s'} across all categories`;
+  document.getElementById('game-legend').innerHTML = '';
+
+  const table = document.getElementById('game-table');
+  if (results.length === 0) {
+    table.innerHTML = `<div class="empty-state">No games found for "${esc(q)}"</div>`; return;
+  }
+
+  const cols = '1fr 54px 120px 1.6fr';
+  table.innerHTML = `
+    <div class="table-header" style="grid-template-columns:${cols}">
+      ${['Game','Hours','Category','Notes'].map(h=>`<span>${h}</span>`).join('')}
+    </div>
+    ${results.map(g => {
+      const cc = CAT_COLORS[g._cat] || '#888';
+      const catLabel = CAT_LABELS[g._cat] || g._cat;
+      const modeColor = MODES[g.mode] || '#888';
+      return `
+        <div class="game-row" style="grid-template-columns:${cols};cursor:pointer;" onclick="jumpToGame('${g._cat}')">
+          <div>
+            <div class="game-title">${esc(g.title)}</div>
+            ${g.mode ? `<span class="tag" style="background:${modeColor}18;color:${modeColor};border:1px solid ${modeColor}28;margin-top:3px;">${g.mode}</span>` : ''}
+          </div>
+          <div class="game-hours">${g.hours||'?'}h</div>
+          <div><span class="cat-badge" style="background:${cc}18;color:${cc};border:1px solid ${cc}28">${catLabel}</span></div>
+          <div class="game-note">${g.note ? esc(g.note) : ''}</div>
+        </div>`;
+    }).join('')}`;
+}
+
+function jumpToGame(cat) {
+  clearGlobalSearch();
+  switchCat(cat);
+}
+
+// ── Note editing ─────────────────────────────────────────────
+function startEditNote(id, cat) {
+  editingNote = {id, cat};
+  renderGames();
+}
+
+function saveNote(id, cat) {
+  const ta = document.getElementById('note-edit-ta');
+  if (!ta) return;
+  appGames[cat] = (appGames[cat]||[]).map(g => g.id === id ? {...g, note: ta.value} : g);
+  editingNote = null;
+  saveData();
+  renderGames();
+}
+
+function cancelNote() {
+  editingNote = null;
+  renderGames();
+}
+
+function noteKeydown(e, id, cat) {
+  if (e.key === 'Escape') { e.preventDefault(); cancelNote(); }
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveNote(id, cat); }
+}
+
+// ── Reorder ───────────────────────────────────────────────────
+function moveRank(id, cat, dir) {
+  const sorted = [...(appGames[cat]||[])].sort((a,b) => (a.rank??Infinity)-(b.rank??Infinity));
+  const idx = sorted.findIndex(g => g.id === id);
+  const swapIdx = idx + dir;
+  if (swapIdx < 0 || swapIdx >= sorted.length) return;
+  const r1 = sorted[idx].rank ?? idx + 1;
+  const r2 = sorted[swapIdx].rank ?? swapIdx + 1;
+  appGames[cat] = appGames[cat].map(g => {
+    if (g.id === sorted[idx].id) return {...g, rank: r2};
+    if (g.id === sorted[swapIdx].id) return {...g, rank: r1};
+    return g;
+  });
+  saveData();
+  renderGames();
 }
 
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
