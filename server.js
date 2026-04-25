@@ -242,7 +242,7 @@ app.post("/api/auth/mfa", authLimiter, (req, res) => {
       secure: IS_PROD,
       sameSite: "strict",
       maxAge: 30 * 24 * 60 * 60 * 1000,
-      path: "/api/auth/refresh",
+      path: "/",
     });
     res.json({ accessToken });
   } catch (e) {
@@ -266,7 +266,7 @@ app.post("/api/auth/refresh", (req, res) => {
 app.post("/api/auth/logout", (req, res) => {
   const rt = req.cookies?.refreshToken;
   if (rt) revokeRefreshToken(rt);
-  res.clearCookie("refreshToken", { path: "/api/auth/refresh" });
+  res.clearCookie("refreshToken", { path: "/" });
   res.json({ ok: true });
 });
 
@@ -283,7 +283,7 @@ app.post("/api/auth/change-password", requireAuth, async (req, res) => {
     writeJSON("credentials.json", { ...creds, hash: newHash, salt });
     // revoke all refresh tokens
     writeJSON("refresh_tokens.json", {});
-    res.clearCookie("refreshToken", { path: "/api/auth/refresh" });
+    res.clearCookie("refreshToken", { path: "/" });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: "Password change failed" });
