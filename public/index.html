@@ -6,15 +6,18 @@
 <title>Game Backlog</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  ::selection { background: var(--gold); color: var(--bg); opacity: 1; }
   :root {
-    --bg: #0f0f0f; --surface: #141414; --border: #1e1e1e; --border2: #252525;
-    --text: #f0ede6; --muted: #504e4b; --sub: #8a8784;
-    --gold: #e8c547; --red: #e87c7c; --green: #b8d47e; --blue: #7eb8d4;
-    --font: Georgia, 'Times New Roman', serif; --mono: monospace;
+    --bg: #0d0d14; --surface: #13131e; --border: #1e1e30; --border2: #2a2a42;
+    --text: #eae8f6; --muted: #7a7898; --sub: #9390b0;
+    --gold: #a78bfa; --red: #f87171; --green: #86efac; --blue: #7dd3fc;
+    --font: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    --table-head: #0f0f18; --row-hover: #17172a; --secret-bg: #09090f; --btn-gold-text: #0d0d14;
   }
-  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 15px; line-height: 1.5; }
   input, textarea, select, button { font-family: inherit; }
-  input, textarea { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 2px; outline: none; padding: 8px 12px; width: 100%; }
+  input, textarea { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 6px; outline: none; padding: 9px 13px; width: 100%; font-size: 15px; }
   input:focus, textarea:focus { border-color: var(--border2); }
   button { cursor: pointer; border: none; background: transparent; }
   a { color: var(--gold); }
@@ -23,34 +26,34 @@
   /* Screens */
   #app { height: 100vh; }
   .screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-  .screen-box { width: 400px; padding: 48px 40px; }
-  .screen-tag { font-family: var(--mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
-  .screen-title { font-size: 22px; font-weight: normal; color: var(--text); margin-bottom: 32px; letter-spacing: -0.02em; }
-  .field { margin-bottom: 14px; }
-  .field label { display: block; font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
-  .field input { font-size: 13px; font-family: var(--mono); }
-  .field-hint { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 5px; line-height: 1.5; }
-  .error-msg { font-family: var(--mono); font-size: 11px; color: var(--red); margin: 8px 0; }
-  .success-msg { font-family: var(--mono); font-size: 11px; color: var(--green); margin: 8px 0; }
-  .btn { display: inline-block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; padding: 8px 16px; border-radius: 2px; border: 1px solid; transition: all 0.15s; cursor: pointer; }
-  .btn-gold { background: var(--gold); color: #0f0f0f; border-color: var(--gold); }
+  .screen-box { width: 420px; padding: 52px 44px; }
+  .screen-tag { font-size: 12px; font-weight: 500; color: var(--gold); margin-bottom: 8px; }
+  .screen-title { font-size: 28px; font-weight: 300; color: var(--text); margin-bottom: 32px; letter-spacing: -0.02em; }
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 6px; }
+  .field input { font-size: 15px; }
+  .field-hint { font-size: 13px; color: var(--muted); margin-top: 6px; line-height: 1.55; }
+  .error-msg { font-size: 13px; color: var(--red); margin: 8px 0; }
+  .success-msg { font-size: 13px; color: var(--green); margin: 8px 0; }
+  .btn { display: inline-block; font-size: 13px; font-weight: 500; padding: 8px 18px; border-radius: 6px; border: 1px solid; transition: all 0.15s; cursor: pointer; }
+  .btn-gold { background: var(--gold); color: var(--btn-gold-text); border-color: var(--gold); }
   .btn-ghost { background: transparent; color: var(--muted); border-color: var(--border2); }
-  .btn-ghost:hover { color: var(--text); border-color: var(--border); }
-  .btn-danger { background: transparent; color: var(--red); border-color: #e87c7c44; }
-  .btn-sm { font-size: 8px; padding: 3px 8px; }
+  .btn-ghost:hover { color: var(--text); border-color: var(--sub); }
+  .btn-danger { background: transparent; color: var(--red); border-color: #f8717144; }
+  .btn-sm { font-size: 12px; padding: 4px 10px; }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .btn-row { display: flex; gap: 8px; margin-top: 8px; }
-  .secret-box { background: #0a0a0a; border: 1px solid var(--border); border-radius: 2px; padding: 14px 16px; font-family: var(--mono); font-size: 18px; color: var(--text); letter-spacing: 0.18em; text-align: center; margin: 12px 0; }
+  .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+  .secret-box { background: var(--secret-bg); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; font-family: var(--mono); font-size: 18px; color: var(--text); letter-spacing: 0.18em; text-align: center; margin: 12px 0; }
   .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
-  .checkbox-row label { font-family: var(--mono); font-size: 11px; color: var(--muted); cursor: pointer; }
+  .checkbox-row label { font-size: 13px; color: var(--muted); cursor: pointer; }
 
   /* Main layout */
   #main-app { display: flex; flex-direction: column; height: 100vh; }
-  .top-bar { border-bottom: 1px solid var(--border); padding: 14px 32px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
-  .top-bar h1 { font-size: 17px; font-weight: normal; letter-spacing: -0.02em; }
-  .top-bar .meta { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-left: 14px; }
+  .top-bar { border-bottom: 1px solid var(--border); padding: 12px 32px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .top-bar h1 { font-size: 18px; font-weight: 500; letter-spacing: -0.01em; }
+  .top-bar .meta { font-size: 13px; color: var(--muted); margin-left: 12px; }
   .nav { display: flex; }
-  .nav-btn { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; padding: 6px 14px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--muted); transition: all 0.15s; cursor: pointer; margin-bottom: -1px; }
+  .nav-btn { font-size: 14px; font-weight: 400; padding: 6px 16px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--muted); transition: all 0.15s; cursor: pointer; margin-bottom: -1px; }
   .nav-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
   .content { flex: 1; overflow-y: auto; padding: 28px 32px; max-width: 1300px; width: 100%; margin: 0 auto; }
 
@@ -59,76 +62,81 @@
   .tab-pane.active { display: block; }
 
   /* Category tabs */
-  .cat-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 16px; align-items: center; }
-  .cat-btn { font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; padding: 7px 12px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; margin-bottom: -1px; transition: all 0.15s; white-space: nowrap; }
+  .cat-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 18px; align-items: center; }
+  .cat-btn { font-size: 13px; padding: 8px 14px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; margin-bottom: -1px; transition: all 0.15s; white-space: nowrap; }
   .cat-btn.active { border-bottom-color: var(--gold); color: var(--gold); }
-  .cat-meta { margin-left: auto; font-family: var(--mono); font-size: 9px; color: var(--muted); }
+  .cat-meta { margin-left: auto; font-size: 13px; color: var(--muted); }
 
   /* Filters */
-  .filters { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
-  .filters label { font-family: var(--mono); font-size: 9px; color: var(--muted); }
-  .filter-btn { font-family: var(--mono); font-size: 8px; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 8px; border-radius: 2px; border: 1px solid var(--border2); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; }
-  .filter-btn.active { color: #0f0f0f; }
-  .search-input { background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 11px; padding: 4px 10px; border-radius: 2px; width: 160px; }
+  .filters { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+  .filters label { font-size: 13px; color: var(--muted); }
+  .filter-btn { font-size: 12px; padding: 3px 10px; border-radius: 20px; border: 1px solid var(--border2); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; }
+  .filter-btn.active { color: var(--btn-gold-text); }
+  .search-input { background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: 13px; padding: 5px 12px; border-radius: 6px; width: 180px; }
 
   /* Game table */
-  .game-table { border: 1px solid var(--border); border-radius: 3px; overflow: hidden; }
-  .table-header { display: grid; background: #111; border-bottom: 1px solid var(--border); padding: 7px 14px; gap: 12px; }
-  .table-header span { font-family: var(--mono); font-size: 9px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--muted); }
-  .game-row { display: grid; padding: 10px 14px; gap: 12px; border-bottom: 1px solid var(--border); transition: background 0.12s; align-items: start; }
+  .game-table { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .table-header { display: grid; background: var(--table-head); border-bottom: 1px solid var(--border); padding: 8px 16px; gap: 12px; }
+  .table-header span { font-size: 12px; font-weight: 500; color: var(--muted); }
+  .game-row { display: grid; padding: 12px 16px; gap: 12px; border-bottom: 1px solid var(--border); transition: background 0.12s; align-items: start; }
   .game-row:last-child { border-bottom: none; }
-  .game-row:hover { background: #141414; }
+  .game-row:hover { background: var(--row-hover); }
   .game-row:hover .game-note { color: var(--sub) !important; }
-  .game-title { font-size: 13px; color: var(--text); line-height: 1.3; }
-  .game-hours { font-family: var(--mono); font-size: 11px; color: var(--sub); padding-top: 1px; }
-  .game-note { font-size: 11px; color: #4a4845; line-height: 1.6; font-style: italic; transition: color 0.12s; }
-  .game-rank { font-family: var(--mono); font-size: 11px; color: var(--muted); padding-top: 2px; }
-  .game-rank.top { color: var(--gold); font-weight: bold; }
-  .tag { display: inline-block; font-family: var(--mono); font-size: 8px; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 6px; border-radius: 2px; white-space: nowrap; margin-bottom: 3px; }
-  .game-actions { display: flex; flex-direction: column; gap: 4px; }
-  .action-btn { font-family: var(--mono); font-size: 8px; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 6px; border-radius: 2px; cursor: pointer; border: 1px solid; background: transparent; transition: all 0.12s; }
-  .action-played { color: var(--green); border-color: #b8d47e30; }
-  .action-played:hover { background: #b8d47e15; }
-  .game-actions select { font-family: var(--mono); font-size: 8px; background: var(--surface); color: var(--muted); border: 1px solid var(--border2); border-radius: 2px; padding: 2px 4px; cursor: pointer; }
-  .empty-state { padding: 32px; text-align: center; color: var(--muted); font-family: var(--mono); font-size: 11px; font-style: italic; }
+  .game-title { font-size: 15px; color: var(--text); line-height: 1.35; font-weight: 400; }
+  .game-hours { font-size: 13px; color: var(--sub); padding-top: 2px; }
+  .game-note { font-size: 13px; color: var(--note-color, #3e3c58); line-height: 1.65; font-style: italic; transition: color 0.12s; }
+  .game-rank { font-size: 13px; color: var(--muted); padding-top: 2px; }
+  .game-rank.top { color: var(--gold); font-weight: 600; }
+  .tag { display: inline-block; font-size: 12px; padding: 3px 9px; border-radius: 20px; white-space: nowrap; margin-bottom: 4px; margin-right: 2px; font-weight: 500; }
+  .game-actions { display: flex; flex-direction: column; gap: 5px; }
+  .action-btn { font-size: 12px; padding: 3px 8px; border-radius: 5px; cursor: pointer; border: 1px solid; background: transparent; transition: all 0.12s; }
+  .action-played { color: var(--green); border-color: #86efac30; }
+  .action-played:hover { background: #86efac15; }
+  .game-actions select { font-size: 12px; background: var(--surface); color: var(--muted); border: 1px solid var(--border2); border-radius: 5px; padding: 3px 6px; cursor: pointer; }
+  .empty-state { padding: 40px; text-align: center; color: var(--muted); font-size: 14px; font-style: italic; }
 
   /* Profile tab */
   .profile-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; }
-  .profile-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); font-style: italic; margin-top: 4px; }
-  .profile-view { background: var(--surface); border: 1px solid var(--border); border-radius: 3px; padding: 24px; max-height: 75vh; overflow-y: auto; }
-  .profile-section { font-family: var(--mono); font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); margin-top: 20px; margin-bottom: 6px; }
+  .profile-meta { font-size: 13px; color: var(--muted); font-style: italic; margin-top: 4px; }
+  .profile-view { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 24px; max-height: 75vh; overflow-y: auto; }
+  .profile-section { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); margin-top: 22px; margin-bottom: 8px; }
   .profile-section:first-child { margin-top: 0; }
-  .profile-body { font-size: 12px; color: var(--sub); line-height: 1.75; }
-  .profile-textarea { width: 100%; min-height: 600px; background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 11px; line-height: 1.7; padding: 16px; border-radius: 3px; resize: vertical; }
+  .profile-body { font-size: 14px; color: var(--sub); line-height: 1.8; }
+  .profile-textarea { width: 100%; min-height: 600px; background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 13px; line-height: 1.7; padding: 16px; border-radius: 8px; resize: vertical; }
 
   /* Pending tab */
-  .pending-card { background: var(--surface); border: 1px solid var(--border); border-radius: 3px; padding: 16px 20px; margin-bottom: 12px; }
-  .pending-type-badge { font-family: var(--mono); font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 8px; border-radius: 2px; margin-bottom: 10px; display: inline-block; }
-  .pending-desc { font-size: 13px; color: var(--text); margin-bottom: 6px; }
-  .pending-reason { font-size: 11px; color: var(--sub); line-height: 1.6; margin-bottom: 8px; font-style: italic; }
-  .pending-meta { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-bottom: 12px; }
-  .pending-badge { background: var(--gold); color: #0f0f0f; font-family: var(--mono); font-size: 8px; padding: 1px 5px; border-radius: 2px; margin-left: 4px; vertical-align: middle; }
-  .history-card { background: var(--surface); border: 1px solid var(--border); border-radius: 3px; padding: 12px 16px; margin-bottom: 8px; opacity: 0.65; }
-  .empty-pending { color: var(--muted); font-family: var(--mono); font-size: 11px; font-style: italic; text-align: center; padding: 48px 0; }
+  .pending-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px 22px; margin-bottom: 14px; }
+  .pending-type-badge { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; margin-bottom: 12px; display: inline-block; }
+  .pending-desc { font-size: 15px; color: var(--text); margin-bottom: 6px; line-height: 1.45; }
+  .pending-reason { font-size: 13px; color: var(--sub); line-height: 1.65; margin-bottom: 10px; font-style: italic; }
+  .pending-meta { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+  .pending-badge { background: var(--gold); color: var(--btn-gold-text); font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 10px; margin-left: 4px; vertical-align: middle; }
+  .history-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; opacity: 0.65; }
+  .empty-pending { color: var(--muted); font-size: 14px; font-style: italic; text-align: center; padding: 48px 0; }
 
   /* Settings tab */
   .settings-section { max-width: 480px; margin-bottom: 36px; }
-  .settings-title { font-family: var(--mono); font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); margin-bottom: 12px; }
-  .settings-desc { font-size: 11px; color: var(--muted); line-height: 1.65; margin-bottom: 12px; }
+  .settings-title { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gold); margin-bottom: 12px; }
+  .settings-desc { font-size: 14px; color: var(--muted); line-height: 1.65; margin-bottom: 12px; }
   .settings-fields { display: flex; flex-direction: column; gap: 10px; }
 
+  /* Theme buttons */
+  .theme-btn { color: var(--muted); border-color: var(--border2); min-width: 64px; }
+  .theme-btn.active { color: var(--gold); border-color: var(--gold); }
+  .theme-btn:hover { color: var(--text); border-color: var(--sub); }
+
   /* Legend */
-  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; align-items: center; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 16px; align-items: center; }
   .legend-item { display: flex; align-items: center; gap: 5px; }
-  .legend-dot { width: 6px; height: 6px; border-radius: 1px; }
-  .legend-label { font-family: var(--mono); font-size: 9px; color: var(--muted); }
+  .legend-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .legend-label { font-size: 12px; color: var(--muted); }
 </style>
 </head>
 <body>
 <div id="app">
   <!-- LOADING -->
   <div id="screen-loading" class="screen">
-    <div style="font-family:var(--mono);font-size:11px;letter-spacing:0.15em;color:var(--muted)">LOADING</div>
+    <div style="font-size:13px;color:var(--muted)">Loading…</div>
   </div>
 
   <!-- SETUP -->
@@ -146,12 +154,12 @@
       </div>
       <!-- Step 2: TOTP -->
       <div id="setup-step2" class="hidden">
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:3px;padding:20px;margin-bottom:16px;">
-          <div style="font-family:var(--mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold);margin-bottom:10px;">Set Up Authenticator</div>
-          <div style="font-size:11px;color:var(--sub);line-height:1.7;margin-bottom:14px;">Scan this QR code with Google Authenticator, Authy, or any TOTP app — or enter the key manually:</div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:16px;">
+          <div style="font-size:12px;font-weight:600;color:var(--gold);margin-bottom:10px;">Set Up Authenticator</div>
+          <div style="font-size:13px;color:var(--sub);line-height:1.7;margin-bottom:14px;">Scan this QR code with Google Authenticator, Authy, or any TOTP app — or enter the key manually:</div>
           <div style="text-align:center;margin:12px 0;"><img id="setup-qr" src="" alt="QR Code" style="width:160px;height:160px;image-rendering:pixelated;border:4px solid #fff;border-radius:4px;"></div>
           <div class="secret-box" id="setup-secret-display"></div>
-          <div style="font-family:var(--mono);font-size:9px;color:var(--muted);text-align:center;">Account: GameBacklog · Type: Time-based (TOTP)</div>
+          <div style="font-size:12px;color:var(--muted);text-align:center;">Account: GameBacklog · Time-based (TOTP)</div>
         </div>
         <div class="field"><label>Verify — enter the 6-digit code from your app</label><input id="setup-totp" type="text" placeholder="000000" maxlength="6"></div>
         <div id="setup-error2" class="error-msg hidden"></div>
@@ -234,7 +242,7 @@
       <div class="tab-pane" id="tab-profile">
         <div class="profile-header">
           <div>
-            <div style="font-family:var(--mono);font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--gold);margin-bottom:4px;">Taste Profile</div>
+            <div style="font-size:12px;font-weight:600;color:var(--gold);margin-bottom:4px;">Taste Profile</div>
             <div class="profile-meta">Fed to Claude as context on every message</div>
           </div>
           <div style="display:flex;gap:8px;" id="profile-btns">
@@ -247,7 +255,7 @@
       <!-- PENDING TAB -->
       <div class="tab-pane" id="tab-pending">
         <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:20px;">
-          <div style="font-family:var(--mono);font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--gold);">Pending Suggestions</div>
+          <div style="font-size:15px;font-weight:500;color:var(--text);">Pending Suggestions</div>
           <div style="display:flex;gap:8px;">
             <button class="btn btn-gold btn-sm" id="approve-all-btn" onclick="approveAll()" style="display:none;">Approve All</button>
             <button class="btn btn-ghost btn-sm" onclick="loadPending()">Refresh</button>
@@ -262,6 +270,15 @@
 
       <!-- SETTINGS TAB -->
       <div class="tab-pane" id="tab-settings">
+        <div class="settings-section">
+          <div class="settings-title">Theme</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn theme-btn" data-theme="void"  onclick="applyTheme('void')">Void</button>
+            <button class="btn theme-btn" data-theme="dusk"  onclick="applyTheme('dusk')">Dusk</button>
+            <button class="btn theme-btn" data-theme="ash"   onclick="applyTheme('ash')">Ash</button>
+            <button class="btn theme-btn" data-theme="light" onclick="applyTheme('light')">Light</button>
+          </div>
+        </div>
         <div class="settings-section">
           <div class="settings-title">Change Password</div>
           <div class="settings-fields">
@@ -280,7 +297,7 @@
         <div class="settings-section">
           <div class="settings-title">Connect Claude</div>
           <div class="settings-desc">To connect Claude.ai to your game library via MCP:</div>
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:3px;padding:16px 20px;font-family:var(--mono);font-size:11px;line-height:2.1;color:var(--sub);">
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 22px;font-size:13px;line-height:2.0;color:var(--sub);">
             1. In Claude.ai → Settings → Integrations → Add MCP Server<br>
             2. Server URL: <span style="color:var(--gold)">https://your-domain/mcp/[MCP_TOKEN]</span><br>
             3. No additional auth header needed — the token is in the URL<br>
@@ -288,7 +305,7 @@
             5. Ask Claude to evaluate games, suggest moves, or update your profile<br>
             6. All suggestions appear in the <strong style="color:var(--text)">Pending</strong> tab for your approval
           </div>
-          <div style="margin-top:10px;font-family:var(--mono);font-size:9px;color:var(--muted);">MCP_TOKEN is set in your .env file on the server.</div>
+          <div style="margin-top:10px;font-size:12px;color:var(--muted);">MCP_TOKEN is set in your .env file on the server.</div>
         </div>
       </div>
     </div>
@@ -301,6 +318,68 @@
 // ═══════════════════════════════════════════════════════════
 const _baseSeg = window.location.pathname.split('/')[1];
 const API_BASE = _baseSeg ? '/' + _baseSeg : '';
+
+// ═══════════════════════════════════════════════════════════
+// THEMES
+// ═══════════════════════════════════════════════════════════
+const THEMES = {
+  void: {
+    label: 'Void',
+    '--bg':'#0d0d14', '--surface':'#13131e', '--border':'#1e1e30', '--border2':'#2a2a42',
+    '--text':'#eae8f6', '--muted':'#7a7898', '--sub':'#9390b0',
+    '--gold':'#a78bfa', '--red':'#f87171', '--green':'#86efac', '--blue':'#7dd3fc',
+    '--table-head':'#0f0f18', '--row-hover':'#17172a', '--secret-bg':'#09090f', '--btn-gold-text':'#0d0d14', '--note-color':'#3e3c58',
+  },
+  dusk: {
+    label: 'Dusk',
+    '--bg':'#111118', '--surface':'#1c1c28', '--border':'#272738', '--border2':'#333350',
+    '--text':'#ece9f8', '--muted':'#8e8aac', '--sub':'#a8a4c4',
+    '--gold':'#b49dfc', '--red':'#fc8080', '--green':'#93f2b8', '--blue':'#8adafc',
+    '--table-head':'#0e0e1a', '--row-hover':'#1f1f30', '--secret-bg':'#0a0a12', '--btn-gold-text':'#111118', '--note-color':'#44425e',
+  },
+  ash: {
+    label: 'Ash',
+    '--bg':'#0f0f0f', '--surface':'#141414', '--border':'#1e1e1e', '--border2':'#252525',
+    '--text':'#f0ede6', '--muted':'#706e6b', '--sub':'#8a8784',
+    '--gold':'#e8c547', '--red':'#e87c7c', '--green':'#b8d47e', '--blue':'#7eb8d4',
+    '--table-head':'#0b0b0b', '--row-hover':'#181818', '--secret-bg':'#080808', '--btn-gold-text':'#0f0f0f', '--note-color':'#605e58',
+  },
+  light: {
+    label: 'Light',
+    '--bg':'#f1f2f5', '--surface':'#f8f9fb', '--border':'#dde0e8', '--border2':'#c4c8d4',
+    '--text':'#1a1d26', '--muted':'#6b7280', '--sub':'#4b5563',
+    '--gold':'#5548c8', '--red':'#b83232', '--green':'#1a6b40', '--blue':'#2a5fa8',
+    '--table-head':'#e8eaef', '--row-hover':'#edeef2', '--secret-bg':'#e4e6ec', '--btn-gold-text':'#ffffff', '--note-color':'#8b92a0',
+  },
+};
+
+let currentTheme = 'void';
+
+function tagColor(map, mapLight, key) {
+  const m = currentTheme === 'light' ? mapLight : map;
+  return m[key] || (currentTheme === 'light' ? '#555' : '#888');
+}
+
+function tagStyle(color) {
+  if (currentTheme === 'light') {
+    return `background:${color}18;color:${color};border:1px solid ${color}55`;
+  }
+  return `background:${color}18;color:${color};border:1px solid ${color}28`;
+}
+
+function applyTheme(name) {
+  const t = THEMES[name] || THEMES.void;
+  const root = document.documentElement.style;
+  for (const [k, v] of Object.entries(t)) {
+    if (k !== 'label') root.setProperty(k, v);
+  }
+  currentTheme = name;
+  localStorage.setItem('theme', name);
+  document.querySelectorAll('.theme-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.theme === name);
+  });
+  if (typeof renderAll === 'function' && appGames) renderAll();
+}
 
 // ═══════════════════════════════════════════════════════════
 // STATE
@@ -316,6 +395,8 @@ let pendingItems = [];
 let pendingPollTimer = null;
 let profileEditing = false;
 let historyVisible = false;
+
+applyTheme(localStorage.getItem('theme') || 'void');
 
 // ═══════════════════════════════════════════════════════════
 // API
@@ -476,6 +557,10 @@ function switchTab(tab) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === `tab-${tab}`));
   if (tab === 'pending') renderPendingTab();
+  if (tab === 'settings') {
+    const saved = localStorage.getItem('theme') || 'void';
+    document.querySelectorAll('.theme-btn').forEach(b => b.classList.toggle('active', b.dataset.theme === saved));
+  }
 }
 
 function switchCat(cat) {
@@ -488,11 +573,19 @@ function switchCat(cat) {
 // RENDER
 // ═══════════════════════════════════════════════════════════
 const MODES = {
-  atmospheric:'#7eb8d4', narrative:'#e8a87c', detective:'#b8d47e',
-  tactical:'#d4a8e8', immersive:'#e8c547', action:'#e87c7c',
-  strategy:'#a8c4e8', puzzle:'#c4e8a8', rpg:'#f0a8d0'
+  atmospheric:'#7dd3fc', narrative:'#f9a8d4', detective:'#86efac',
+  tactical:'#c4b5fd', immersive:'#a78bfa', action:'#f87171',
+  strategy:'#93c5fd', puzzle:'#fde68a', rpg:'#f0abfc'
 };
-const RISK_COLORS = { low:'#7eb8d4', medium:'#e8c547', high:'#e87c7c' };
+const MODES_LIGHT = {
+  atmospheric:'#1565a8', narrative:'#a0237a', detective:'#1a6b40',
+  tactical:'#5032b0', immersive:'#5c38a8', action:'#b02020',
+  strategy:'#2a509c', puzzle:'#7a5800', rpg:'#8a1a90'
+};
+const RISK_COLORS = { low:'#86efac', medium:'#fbbf24', high:'#f87171' };
+const RISK_COLORS_LIGHT = { low:'#1a6b40', medium:'#7a5800', high:'#b02020' };
+const TYPE_COLORS = { game_move:'#7dd3fc', profile_update:'#f9a8d4', new_game:'#86efac', reorder:'#c4b5fd' };
+const TYPE_COLORS_LIGHT = { game_move:'#1565a8', profile_update:'#a0237a', new_game:'#1a6b40', reorder:'#5032b0' };
 const CAT_LABELS  = { queue:'Play Queue', caveats:'With Caveats', decompression:'Decompression', yourCall:'Your Call', played:'Played' };
 
 function renderAll() {
@@ -523,13 +616,15 @@ function renderFilters() {
   const mf = document.getElementById('mode-filters');
   const rf = document.getElementById('risk-filters');
 
-  mf.innerHTML = showMode ? `<label>Mode:</label> ` + Object.entries(MODES).map(([k,color]) =>
-    `<button class="filter-btn${modeFilter===k?' active':''}" style="${modeFilter===k?`background:${color};border-color:${color}`:''}" onclick="toggleMode('${k}')">${k}</button>`
-  ).join('') : '';
+  mf.innerHTML = showMode ? `<label>Mode:</label> ` + Object.entries(MODES).map(([k]) => {
+    const c = tagColor(MODES, MODES_LIGHT, k);
+    return `<button class="filter-btn${modeFilter===k?' active':''}" style="${modeFilter===k?`background:${c};border-color:${c};color:${currentTheme==='light'?'#fff':'#0d0d14'}`:''}" onclick="toggleMode('${k}')">${k}</button>`;
+  }).join('') : '';
 
-  rf.innerHTML = showRisk ? `<label>Risk:</label> ` + ['low','medium','high'].map(r =>
-    `<button class="filter-btn${riskFilter===r?' active':''}" style="${riskFilter===r?`background:${RISK_COLORS[r]};border-color:${RISK_COLORS[r]}`:''}" onclick="toggleRisk('${r}')">${r}</button>`
-  ).join('') : '';
+  rf.innerHTML = showRisk ? `<label>Risk:</label> ` + ['low','medium','high'].map(r => {
+    const c = tagColor(RISK_COLORS, RISK_COLORS_LIGHT, r);
+    return `<button class="filter-btn${riskFilter===r?' active':''}" style="${riskFilter===r?`background:${c};border-color:${c};color:${currentTheme==='light'?'#fff':'#0d0d14'}`:''}" onclick="toggleRisk('${r}')">${r}</button>`;
+  }).join('') : '';
 }
 
 function toggleMode(k) { modeFilter = modeFilter===k ? null : k; renderFilters(); renderGames(); }
@@ -560,19 +655,19 @@ function renderGames() {
       ${headers.map(h => `<span>${h}</span>`).join('')}
     </div>
     ${list.map((g,i) => {
-      const modeColor = MODES[g.mode] || '#888';
-      const riskColor = RISK_COLORS[g.risk] || '';
+      const modeColor = tagColor(MODES, MODES_LIGHT, g.mode);
+      const riskColor = g.risk ? tagColor(RISK_COLORS, RISK_COLORS_LIGHT, g.risk) : '';
       return `
         <div class="game-row" style="grid-template-columns:${cols}">
           <div class="game-rank${i<5?' top':''}">${String(i+1).padStart(2,'0')}</div>
           <div>
             <div class="game-title">${esc(g.title)}</div>
-            ${g.playedDate ? `<div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:2px;">Played ${g.playedDate}</div>` : ''}
+            ${g.playedDate ? `<div style="font-size:12px;color:var(--muted);margin-top:3px;">Played ${g.playedDate}</div>` : ''}
           </div>
           <div class="game-hours">${g.hours||'?'}h</div>
           <div>
-            ${g.mode ? `<div><span class="tag" style="background:${modeColor}18;color:${modeColor};border:1px solid ${modeColor}28">${g.mode}</span></div>` : ''}
-            ${g.risk ? `<div><span class="tag" style="background:${riskColor}18;color:${riskColor};border:1px solid ${riskColor}28">${g.risk} risk</span></div>` : ''}
+            ${g.mode ? `<div><span class="tag" style="${tagStyle(modeColor)}">${g.mode}</span></div>` : ''}
+            ${g.risk ? `<div><span class="tag" style="${tagStyle(riskColor)}">${g.risk} risk</span></div>` : ''}
           </div>
           <div class="game-note">${esc(g.note||'')}</div>
           <div class="game-actions">
@@ -586,11 +681,13 @@ function renderGames() {
 
   // Legend
   const legend = document.getElementById('game-legend');
-  legend.innerHTML = Object.entries(MODES).map(([k,c]) =>
-    `<div class="legend-item"><div class="legend-dot" style="background:${c}"></div><span class="legend-label">${k}</span></div>`
-  ).join('') + (activeCat==='caveats' ? Object.entries(RISK_COLORS).map(([r,c]) =>
-    `<div class="legend-item"><div class="legend-dot" style="background:${c}"></div><span class="legend-label">${r} risk</span></div>`
-  ).join('') : '');
+  legend.innerHTML = Object.keys(MODES).map(k => {
+    const c = tagColor(MODES, MODES_LIGHT, k);
+    return `<div class="legend-item"><div class="legend-dot" style="background:${c}"></div><span class="legend-label">${k}</span></div>`;
+  }).join('') + (activeCat==='caveats' ? Object.keys(RISK_COLORS).map(r => {
+    const c = tagColor(RISK_COLORS, RISK_COLORS_LIGHT, r);
+    return `<div class="legend-item"><div class="legend-dot" style="background:${c}"></div><span class="legend-label">${r} risk</span></div>`;
+  }).join('') : '');
 }
 
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -651,7 +748,6 @@ async function saveProfile() {
 // PENDING
 // ═══════════════════════════════════════════════════════════
 const TYPE_LABELS = { game_move: 'Game Move', profile_update: 'Profile Update', new_game: 'New Game', reorder: 'Reorder' };
-const TYPE_COLORS = { game_move: '#7eb8d4', profile_update: '#e8a87c', new_game: '#b8d47e', reorder: '#c4a7e7' };
 
 function pendingDesc(item) {
   if (item.type === 'game_move') {
@@ -703,14 +799,14 @@ function renderPendingTab() {
     return;
   }
   list.innerHTML = pendingItems.map(item => {
-    const color = TYPE_COLORS[item.type] || '#888';
+    const color = tagColor(TYPE_COLORS, TYPE_COLORS_LIGHT, item.type);
     const detailHtml = item.type === 'new_game' && item.data.note
-      ? `<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.6;">${esc(item.data.note)}</div>`
+      ? `<div style="font-size:13px;color:var(--muted);margin-bottom:8px;line-height:1.65;">${esc(item.data.note)}</div>`
       : item.type === 'profile_update' && item.data.change
-      ? `<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.6;">${esc(item.data.change)}</div>`
+      ? `<div style="font-size:13px;color:var(--muted);margin-bottom:8px;line-height:1.65;">${esc(item.data.change)}</div>`
       : '';
     return `<div class="pending-card">
-      <div><span class="pending-type-badge" style="background:${color}18;color:${color};border:1px solid ${color}28">${TYPE_LABELS[item.type]||item.type}</span></div>
+      <div><span class="pending-type-badge" style="${tagStyle(color)}">${TYPE_LABELS[item.type]||item.type}</span></div>
       <div class="pending-desc">${pendingDesc(item)}</div>
       ${detailHtml}
       <div class="pending-reason">"${esc(item.reason)}"</div>
@@ -763,16 +859,16 @@ async function toggleHistory() {
   try {
     const all = await api('GET', '/api/pending/history');
     const done = (all || []).filter(p => p.status !== 'pending');
-    if (done.length === 0) { el.innerHTML = `<div style="font-family:var(--mono);font-size:11px;color:var(--muted);font-style:italic;">No history yet.</div>`; return; }
-    el.innerHTML = `<div style="font-family:var(--mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold);margin-bottom:12px;">History</div>` +
+    if (done.length === 0) { el.innerHTML = `<div style="font-size:13px;color:var(--muted);font-style:italic;">No history yet.</div>`; return; }
+    el.innerHTML = `<div style="font-size:13px;font-weight:600;color:var(--gold);margin-bottom:12px;">History</div>` +
       done.map(item => {
         const statusColor = item.status === 'approved' ? 'var(--green)' : 'var(--red)';
         return `<div class="history-card">
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
-            <span style="font-size:12px;color:var(--sub);">${pendingDesc(item)}</span>
-            <span class="history-status" style="color:${statusColor}">${item.status}</span>
+            <span style="font-size:13px;color:var(--sub);">${pendingDesc(item)}</span>
+            <span class="history-status" style="color:${statusColor};font-size:12px;">${item.status}</span>
           </div>
-          <div style="font-family:var(--mono);font-size:9px;color:var(--muted);">${fmtDate(item.createdAt)}</div>
+          <div style="font-size:12px;color:var(--muted);">${fmtDate(item.createdAt)}</div>
         </div>`;
       }).join('');
   } catch { el.innerHTML = `<div style="color:var(--red);font-size:11px;">Failed to load history.</div>`; }
