@@ -248,7 +248,10 @@
       <div class="tab-pane" id="tab-pending">
         <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:20px;">
           <div style="font-family:var(--mono);font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--gold);">Pending Suggestions</div>
-          <button class="btn btn-ghost btn-sm" onclick="loadPending()">Refresh</button>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-gold btn-sm" id="approve-all-btn" onclick="approveAll()" style="display:none;">Approve All</button>
+            <button class="btn btn-ghost btn-sm" onclick="loadPending()">Refresh</button>
+          </div>
         </div>
         <div id="pending-list"></div>
         <div style="margin-top:28px;padding-top:20px;border-top:1px solid var(--border);">
@@ -684,13 +687,12 @@ async function loadPending() {
 
 function renderPendingBadge() {
   const badge = document.getElementById('pending-badge');
-  if (!badge) return;
-  if (pendingItems.length > 0) {
-    badge.textContent = pendingItems.length;
-    badge.classList.remove('hidden');
-  } else {
-    badge.classList.add('hidden');
+  if (badge) {
+    if (pendingItems.length > 0) { badge.textContent = pendingItems.length; badge.classList.remove('hidden'); }
+    else badge.classList.add('hidden');
   }
+  const approveAllBtn = document.getElementById('approve-all-btn');
+  if (approveAllBtn) approveAllBtn.style.display = pendingItems.length > 1 ? '' : 'none';
 }
 
 function renderPendingTab() {
@@ -719,6 +721,20 @@ function renderPendingTab() {
       </div>
     </div>`;
   }).join('');
+}
+
+async function approveAll() {
+  const btn = document.getElementById('approve-all-btn');
+  btn.disabled = true;
+  btn.textContent = 'Approving...';
+  await api('POST', '/api/pending/approve-all');
+  pendingItems = [];
+  const data = await api('GET', '/api/data');
+  if (data.games)   { appGames = data.games;   updateMeta(); }
+  if (data.profile) { appProfile = data.profile; renderProfile(); }
+  await loadPending();
+  btn.disabled = false;
+  btn.textContent = 'Approve All';
 }
 
 async function approvePending(id) {

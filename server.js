@@ -388,6 +388,73 @@ app.post("/api/pending/:id/approve", requireAuth, (req, res) => {
   res.json(pending.filter(p => p.status === "pending"));
 });
 
+app.post("/api/pending/approve-all", requireAuth, (req, res) => {
+  const pending = readJSON("pending.json", []);
+  const toApprove = pending.filter(p => p.status === "pending");
+  const errors = [];
+  for (const item of toApprove) {
+    try {
+      if (item.type === "game_move") {
+        const { title, fromCategory, toCategory, rank } = item.data;
+        const games = readJSON("games.json", {});
+        const fromList = games[fromCategory] || [];
+        const idx = fromList.findIndex(g => g.title.toLowerCase() === title.toLowerCase());
+        if (idx !== -1) {
+          const [game] = fromList.splice(idx, 1);
+          games[fromCategory] = fromList;
+          const toList = games[toCategory] || [];
+          game.rank = assignRank(toList, rank);
+          games[toCategory] = [...toList, game];
+          writeJSON("games.json", games);
+        }
+      } else if (item.type === "profile_update") {
+        const { section, change } = item.data;
+        const header = section.toUpperCase();
+        const profile = readJSON("profile.json", "");
+        const parts = profile.split(/(?=^[A-Z][A-Z\s\/\(\)&+,:'-]+$)/m);
+        const idx = parts.findIndex(p => p.trimStart().startsWith(header));
+        let updated;
+        if (idx !== -1) {
+          parts[idx] = `${header}\n${change}`;
+          updated = parts.join('').trim();
+        } else {
+          updated = profile.trim() + `\n\n${header}\n${change}`;
+        }
+        writeJSON("profile.json", updated);
+      } else if (item.type === "new_game") {
+        const { title, category, mode, risk, hours, note, rank } = item.data;
+        const games = readJSON("games.json", {});
+        const id = "mcp-" + crypto.randomBytes(4).toString("hex");
+        const list = games[category] || [];
+        const newRank = assignRank(list, rank);
+        games[category] = [...list, { id, title, mode, risk, hours, note, rank: newRank }];
+        writeJSON("games.json", games);
+      } else if (item.type === "reorder") {
+        const { category, rankedTitles } = item.data;
+        const games = readJSON("games.json", {});
+        const list = games[category] || [];
+        rankedTitles.forEach((title, i) => {
+          const game = list.find(g => g.title.toLowerCase() === title.toLowerCase());
+          if (game) game.rank = i + 1;
+        });
+        const included = new Set(rankedTitles.map(t => t.toLowerCase()));
+        const unranked = list.filter(g => !included.has(g.title.toLowerCase()))
+          .sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
+        unranked.forEach((g, i) => { g.rank = rankedTitles.length + i + 1; });
+        games[category] = list;
+        writeJSON("games.json", games);
+      }
+      item.status = "approved";
+      item.approvedAt = new Date().toISOString();
+    } catch (e) {
+      console.error("Approve-all error on", item.id, e);
+      errors.push(item.id);
+    }
+  }
+  writeJSON("pending.json", pending);
+  res.json({ approved: toApprove.length - errors.length, errors });
+});
+
 app.post("/api/pending/:id/reject", requireAuth, (req, res) => {
   const pending = readJSON("pending.json", []);
   const item = pending.find(p => p.id === req.params.id);
