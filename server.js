@@ -338,7 +338,21 @@ app.post("/api/pending/:id/approve", requireAuth, (req, res) => {
     } else if (item.type === "profile_update") {
       const { section, change } = item.data;
       const profile = readJSON("profile.json", "");
-      writeJSON("profile.json", profile + `\n\n${section.toUpperCase()}\n${change}`);
+      const header = section.toUpperCase();
+      // Split into chunks at every all-caps section header
+      const sectionRe = /^([A-Z][A-Z\s\/\(\)&+,:'-]+)$/m;
+      const parts = profile.split(/(?=^[A-Z][A-Z\s\/\(\)&+,:'-]+$)/m);
+      const idx = parts.findIndex(p => p.trimStart().startsWith(header));
+      let updated;
+      if (idx !== -1) {
+        // Replace the body of the existing section, keep the header
+        parts[idx] = `${header}\n${change}`;
+        updated = parts.join('').trim();
+      } else {
+        // Section not found — append
+        updated = profile.trim() + `\n\n${header}\n${change}`;
+      }
+      writeJSON("profile.json", updated);
     } else if (item.type === "new_game") {
       const { title, category, mode, risk, hours, note, rank } = item.data;
       const games = readJSON("games.json", {});
