@@ -234,6 +234,18 @@ function createMcpRouter({ readJSON, writeJSON }) {
     return server;
   }
 
+  // Normalize Accept header — some clients (e.g. Claude.ai connector) omit the
+  // text/event-stream requirement that StreamableHTTPServerTransport enforces.
+  router.use((req, _res, next) => {
+    const accept = req.headers["accept"] || "";
+    if (!accept.includes("text/event-stream")) {
+      req.headers["accept"] = accept
+        ? `${accept}, application/json, text/event-stream`
+        : "application/json, text/event-stream";
+    }
+    next();
+  });
+
   // POST — initialize a new session or handle an existing one
   router.post("/", async (req, res) => {
     const sessionId = req.headers["mcp-session-id"];

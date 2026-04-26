@@ -51,6 +51,8 @@ if [[ ! -d "$APP_DIR/node_modules" ]]; then
   error "node_modules not found. Run: cd $APP_DIR && npm install"
 fi
 
+npm ci
+
 # Find node binary
 NODE_BIN=$(which node 2>/dev/null || true)
 if [[ -z "$NODE_BIN" ]]; then
