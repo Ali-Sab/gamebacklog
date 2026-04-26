@@ -12,6 +12,7 @@ process.env.NODE_ENV   = "test";
 
 const { app, computeTOTP } = require("../server");
 const { execTool }         = require("../mcp-server");
+const { readJSON, writeJSON } = require("../db");
 const { setupAndLogin, makeStore } = require("./helpers");
 
 let token;
@@ -82,13 +83,6 @@ describe("game_move suggestion", () => {
   let itemId;
 
   beforeAll(async () => {
-    // Use execTool directly (same data dir) to inject a suggestion
-    const readJSON = (f, d) => {
-      try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), "utf8")); } catch { return d; }
-    };
-    const writeJSON = (f, d) => {
-      fs.writeFileSync(path.join(DATA_DIR, f), JSON.stringify(d, null, 2));
-    };
     await execTool("suggest_game_move", {
       title: "Hollow Knight",
       fromCategory: "queue",
@@ -128,12 +122,6 @@ describe("approve game_move", () => {
   let itemId;
 
   beforeAll(async () => {
-    const readJSON = (f, d) => {
-      try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), "utf8")); } catch { return d; }
-    };
-    const writeJSON = (f, d) => {
-      fs.writeFileSync(path.join(DATA_DIR, f), JSON.stringify(d, null, 2));
-    };
     // Move Hades from caveats to queue
     await execTool("suggest_game_move", {
       title: "Hades",
@@ -168,12 +156,6 @@ describe("approve new_game", () => {
   let itemId;
 
   beforeAll(async () => {
-    const readJSON = (f, d) => {
-      try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), "utf8")); } catch { return d; }
-    };
-    const writeJSON = (f, d) => {
-      fs.writeFileSync(path.join(DATA_DIR, f), JSON.stringify(d, null, 2));
-    };
     await execTool("suggest_new_game", {
       title: "Disco Elysium",
       category: "queue",
@@ -201,12 +183,6 @@ describe("approve profile_update", () => {
   let itemId;
 
   beforeAll(async () => {
-    const readJSON = (f, d) => {
-      try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), "utf8")); } catch { return d; }
-    };
-    const writeJSON = (f, d) => {
-      fs.writeFileSync(path.join(DATA_DIR, f), JSON.stringify(d, null, 2));
-    };
     await execTool("suggest_profile_update", {
       section: "SESSION LENGTH",
       change: "Prefers sessions under 2 hours.",

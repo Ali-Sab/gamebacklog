@@ -1,12 +1,14 @@
 "use strict";
 
-const fs   = require("fs");
-const path = require("path");
 const { test, expect } = require("@playwright/test");
-const { DATA_DIR } = require("./constants");
 
-function seedGames(games) {
-  fs.writeFileSync(path.join(DATA_DIR, "games.json"), JSON.stringify(games, null, 2));
+async function seedGames(page, games) {
+  const res = await page.request.post("/api/auth/refresh");
+  const { accessToken } = await res.json();
+  await page.request.post("/api/data", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    data: { games },
+  });
 }
 
 test.beforeEach(async ({ page }) => {
@@ -32,7 +34,7 @@ test("game table renders after switching categories", async ({ page }) => {
 });
 
 test("search filters games by title", async ({ page }) => {
-  seedGames({
+  await seedGames(page, {
     queue: [
       { id: "e2e-1", title: "Hollow Knight", mode: "atmospheric", risk: "", hours: "40", note: "Great game" },
       { id: "e2e-2", title: "SOMA",           mode: "atmospheric", risk: "", hours: "10", note: "Eerie"      },
@@ -62,7 +64,7 @@ test("mark played button appears on non-played games", async ({ page }) => {
 });
 
 test("switching to played category shows no mark-played button", async ({ page }) => {
-  seedGames({
+  await seedGames(page, {
     queue: [], caveats: [], decompression: [], yourCall: [],
     played: [{ id: "e2e-p1", title: "Finished Game", mode: "action", risk: "", hours: "20", note: "", playedDate: "1/1/2025" }]
   });

@@ -59,8 +59,10 @@ describe("POST /api/setup", () => {
   });
 
   test("accepts valid credentials and TOTP code", async () => {
-    // This is the "real" setup that the rest of auth tests depend on
+    // This is the "real" setup that the rest of auth tests depend on.
+    // Store secret at module scope so later describe blocks can use it.
     const secret = await setupUser(request, app, computeTOTP);
+    totpSecret = secret;
     expect(secret).toMatch(/^[A-Z2-7]{16}$/);
   });
 });
@@ -150,15 +152,9 @@ describe("POST /api/auth/mfa (step 2)", () => {
 
 // ─── Token lifecycle ──────────────────────────────────────────────────────────
 describe("full token lifecycle", () => {
-  // We store the secret from a fresh setup for a second user isn't available,
-  // so we read credentials.json to get totpSecret.
   let accessToken, cookie;
 
   beforeAll(async () => {
-    const creds = JSON.parse(
-      fs.readFileSync(require("path").join(DATA_DIR, "credentials.json"), "utf8")
-    );
-    totpSecret = creds.totpSecret;
     const result = await login(request, app, totpSecret, computeTOTP);
     accessToken = result.accessToken;
     cookie = result.cookie;
@@ -206,11 +202,7 @@ describe("POST /api/auth/change-password", () => {
   let token;
 
   beforeAll(async () => {
-    const creds = JSON.parse(
-      fs.readFileSync(path.join(DATA_DIR, "credentials.json"), "utf8")
-    );
-    const s = creds.totpSecret;
-    const result = await login(request, app, s, computeTOTP);
+    const result = await login(request, app, totpSecret, computeTOTP);
     token = result.accessToken;
   });
 
