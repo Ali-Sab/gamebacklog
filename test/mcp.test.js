@@ -51,14 +51,12 @@ describe("get_game_library", () => {
     expect(data.caveats[0].rank).toBe(1);
   });
 
-  test("does not include notes field", async () => {
+  test("includes notes for each game", async () => {
     const { readJSON, writeJSON } = makeStore({ "games.json": GAMES });
     const data = json(await execTool("get_game_library", {}, readJSON, writeJSON));
-    for (const items of Object.values(data)) {
-      for (const item of items) {
-        expect(item.note).toBeUndefined();
-      }
-    }
+    expect(data.queue[0].note).toBe("Essential metroidvania");
+    expect(data.queue[1].note).toBe("Existential horror");
+    expect(data.caveats[0].note).toBe("Roguelike with story");
   });
 
   test("includes title, mode, risk, hours, category on each game", async () => {
@@ -93,47 +91,6 @@ describe("get_taste_profile", () => {
   });
 });
 
-// ─── get_game_notes ───────────────────────────────────────────────────────────
-describe("get_game_notes", () => {
-  test("returns notes for a known game", async () => {
-    const { readJSON, writeJSON } = makeStore({ "games.json": GAMES });
-    const result = await execTool("get_game_notes", { titles: ["Hollow Knight"] }, readJSON, writeJSON);
-    const data = json(result);
-    expect(data).toHaveLength(1);
-    expect(data[0].title).toBe("Hollow Knight");
-    expect(data[0].note).toBe("Essential metroidvania");
-  });
-
-  test("is case-insensitive", async () => {
-    const { readJSON, writeJSON } = makeStore({ "games.json": GAMES });
-    const result = await execTool("get_game_notes", { titles: ["hollow knight"] }, readJSON, writeJSON);
-    const data = json(result);
-    expect(data[0].note).toBe("Essential metroidvania");
-  });
-
-  test("returns (not found) for unknown games", async () => {
-    const { readJSON, writeJSON } = makeStore({ "games.json": GAMES });
-    const result = await execTool("get_game_notes", { titles: ["Nonexistent Game"] }, readJSON, writeJSON);
-    const data = json(result);
-    expect(data[0].note).toBe("(not found)");
-  });
-
-  test("returns multiple results for multiple titles", async () => {
-    const { readJSON, writeJSON } = makeStore({ "games.json": GAMES });
-    const result = await execTool("get_game_notes", { titles: ["SOMA", "Hades", "Missing"] }, readJSON, writeJSON);
-    const data = json(result);
-    expect(data).toHaveLength(3);
-    expect(data[0].note).toBe("Existential horror");
-    expect(data[1].note).toBe("Roguelike with story");
-    expect(data[2].note).toBe("(not found)");
-  });
-
-  test("returns empty array for empty titles list", async () => {
-    const { readJSON, writeJSON } = makeStore({ "games.json": GAMES });
-    const result = await execTool("get_game_notes", { titles: [] }, readJSON, writeJSON);
-    expect(json(result)).toEqual([]);
-  });
-});
 
 // ─── suggest_game_move ────────────────────────────────────────────────────────
 describe("suggest_game_move", () => {

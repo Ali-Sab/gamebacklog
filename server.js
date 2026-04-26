@@ -361,6 +361,14 @@ app.post("/api/pending/:id/approve", requireAuth, (req, res) => {
       const newRank = assignRank(list, rank);
       games[category] = [...list, { id, title, mode, risk, hours, note, rank: newRank }];
       writeJSON("games.json", games);
+    } else if (item.type === "game_edit") {
+      const { title, changes } = item.data;
+      const games = readJSON("games.json", {});
+      for (const list of Object.values(games)) {
+        const game = list.find(g => g.title.toLowerCase() === title.toLowerCase());
+        if (game) { Object.assign(game, changes); break; }
+      }
+      writeJSON("games.json", games);
     } else if (item.type === "reorder") {
       const { category, rankedTitles } = item.data;
       const games = readJSON("games.json", {});
@@ -428,6 +436,14 @@ app.post("/api/pending/approve-all", requireAuth, (req, res) => {
         const list = games[category] || [];
         const newRank = assignRank(list, rank);
         games[category] = [...list, { id, title, mode, risk, hours, note, rank: newRank }];
+        writeJSON("games.json", games);
+      } else if (item.type === "game_edit") {
+        const { title, changes } = item.data;
+        const games = readJSON("games.json", {});
+        for (const list of Object.values(games)) {
+          const game = list.find(g => g.title.toLowerCase() === title.toLowerCase());
+          if (game) { Object.assign(game, changes); break; }
+        }
         writeJSON("games.json", games);
       } else if (item.type === "reorder") {
         const { category, rankedTitles } = item.data;

@@ -6,3 +6,4 @@ data/
 *.db-shm
 *.db-wal
 .claude/
+test/e2e/.auth-state.json
