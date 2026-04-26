@@ -713,7 +713,7 @@ function renderGames() {
             ${g.risk ? `<div><span class="tag" style="${tagStyle(riskColor)}">${g.risk} risk</span></div>` : ''}
           </div>
           ${noteHtml}
-          <div class="game-actions" style="align-items:center;">
+          <div class="game-actions" style="display:flex;flex-direction:column;align-items:center;gap:4px;">
             <div style="display:flex;gap:3px;">
               <button class="rank-btn" onclick="moveRank('${g.id}','${activeCat}',-1)" title="Move up">↑</button>
               <button class="rank-btn" onclick="moveRank('${g.id}','${activeCat}',1)" title="Move down">↓</button>
