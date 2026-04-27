@@ -5,13 +5,21 @@ const { StreamableHTTPServerTransport } = require("@modelcontextprotocol/sdk/ser
 const { CallToolRequestSchema, ListToolsRequestSchema, ErrorCode, McpError } = require("@modelcontextprotocol/sdk/types.js");
 const express = require("express");
 const crypto  = require("crypto");
+const { createOrUpdate } = require("./pendingTypes");
 
 // ─── Tool implementations (exported for unit testing) ─────────────────────────
+
+function queue(type, args, reason, readJSON, writeJSON) {
+  const pending = readJSON("pending.json", []) || [];
+  const result = createOrUpdate(type, args, reason, pending);
+  writeJSON("pending.json", pending);
+  return result;
+}
 
 async function execTool(name, args = {}, readJSON, writeJSON) {
   switch (name) {
     case "get_game_library": {
-      const games = readJSON("games.json", {});
+      const games = readJSON("games.json", {}) || {};
       const result = {};
       for (const [cat, list] of Object.entries(games)) {
         const sorted = [...(list || [])].sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
@@ -31,94 +39,37 @@ async function execTool(name, args = {}, readJSON, writeJSON) {
 
     case "suggest_reorder": {
       const { category, rankedTitles, reason } = args;
-      const pending = readJSON("pending.json", []);
-      const existing = pending.find(p => p.status === "pending" && p.type === "reorder" && p.data.category === category);
-      if (existing) {
-        existing.data = { category, rankedTitles };
-        existing.reason = reason;
-        existing.updatedAt = new Date().toISOString();
-      } else {
-        pending.push({ id: crypto.randomBytes(8).toString("hex"), type: "reorder", status: "pending", createdAt: new Date().toISOString(), reason, data: { category, rankedTitles } });
-      }
-      writeJSON("pending.json", pending);
+      queue("reorder", { category, rankedTitles }, reason, readJSON, writeJSON);
       return { content: [{ type: "text", text: `Reorder suggestion queued for ${category} (${rankedTitles.length} games). Awaiting user approval.` }] };
     }
 
     case "suggest_game_move": {
       const { title, fromCategory, toCategory, rank, reason } = args;
-      const pending = readJSON("pending.json", []);
-      // If there's a pending new_game for this title, just update its category —
-      // moving a not-yet-added game is the same as adding it to the final destination.
-      const pendingAdd = pending.find(p => p.status === "pending" && p.type === "new_game" && p.data.title === title);
-      if (pendingAdd) {
-        pendingAdd.data.category = toCategory;
-        if (rank != null) pendingAdd.data.rank = rank;
-        pendingAdd.reason = reason;
-        pendingAdd.updatedAt = new Date().toISOString();
-        writeJSON("pending.json", pending);
-        return { content: [{ type: "text", text: `Suggestion updated: "${title}" will be added directly to ${toCategory}. Awaiting user approval.` }] };
-      }
-      const existing = pending.find(p => p.status === "pending" && p.type === "game_move" && p.data.title === title);
-      if (existing) {
-        existing.data = { title, fromCategory, toCategory, ...(rank != null ? { rank } : {}) };
-        existing.reason = reason;
-        existing.updatedAt = new Date().toISOString();
-      } else {
-        pending.push({ id: crypto.randomBytes(8).toString("hex"), type: "game_move", status: "pending", createdAt: new Date().toISOString(), reason, data: { title, fromCategory, toCategory, ...(rank != null ? { rank } : {}) } });
-      }
-      writeJSON("pending.json", pending);
-      return { content: [{ type: "text", text: `Suggestion queued: move "${title}" from ${fromCategory} to ${toCategory}. Awaiting user approval.` }] };
+      const result = queue("game_move", { title, fromCategory, toCategory, rank }, reason, readJSON, writeJSON);
+      const text = result.collapsed
+        ? `Suggestion updated: "${title}" will be added directly to ${toCategory}. Awaiting user approval.`
+        : `Suggestion queued: move "${title}" from ${fromCategory} to ${toCategory}. Awaiting user approval.`;
+      return { content: [{ type: "text", text }] };
     }
 
     case "suggest_profile_update": {
       const { section, change, reason } = args;
-      const pending = readJSON("pending.json", []);
-      const existing = pending.find(p => p.status === "pending" && p.type === "profile_update" && p.data.section === section);
-      if (existing) {
-        existing.data = { section, change };
-        existing.reason = reason;
-        existing.updatedAt = new Date().toISOString();
-      } else {
-        pending.push({ id: crypto.randomBytes(8).toString("hex"), type: "profile_update", status: "pending", createdAt: new Date().toISOString(), reason, data: { section, change } });
-      }
-      writeJSON("pending.json", pending);
+      queue("profile_update", { section, change }, reason, readJSON, writeJSON);
       return { content: [{ type: "text", text: `Profile update suggestion queued for section "${section}". Awaiting user approval.` }] };
     }
 
     case "suggest_game_edit": {
-      const { title, mode, hours, note, reason } = args;
-      const pending = readJSON("pending.json", []);
-      const changes = {};
-      if (mode  !== undefined) changes.mode  = mode;
-      if (hours !== undefined) changes.hours = hours;
-      if (note  !== undefined) changes.note  = note;
-      if (!Object.keys(changes).length) {
+      const { title, mode, hours, note, url, reason } = args;
+      if (mode === undefined && hours === undefined && note === undefined && url === undefined) {
         return { content: [{ type: "text", text: "No changes specified." }] };
       }
-      const existing = pending.find(p => p.status === "pending" && p.type === "game_edit" && p.data.title.toLowerCase() === title.toLowerCase());
-      if (existing) {
-        existing.data = { title, changes };
-        existing.reason = reason;
-        existing.updatedAt = new Date().toISOString();
-      } else {
-        pending.push({ id: crypto.randomBytes(8).toString("hex"), type: "game_edit", status: "pending", createdAt: new Date().toISOString(), reason, data: { title, changes } });
-      }
-      writeJSON("pending.json", pending);
-      return { content: [{ type: "text", text: `Edit suggestion queued for "${title}" (${Object.keys(changes).join(", ")}). Awaiting user approval.` }] };
+      const result = queue("game_edit", { title, mode, hours, note, url }, reason, readJSON, writeJSON);
+      return { content: [{ type: "text", text: `Edit suggestion queued for "${title}" (${Object.keys(result.item.data.changes).join(", ")}). Awaiting user approval.` }] };
     }
 
     case "suggest_new_game": {
-      const { title, category, mode = "", risk = "", hours = "", note = "", rank, reason } = args;
-      const pending = readJSON("pending.json", []);
-      const existing = pending.find(p => p.status === "pending" && p.type === "new_game" && p.data.title === title);
-      if (existing) {
-        existing.data = { title, category, mode, risk, hours, note, ...(rank != null ? { rank } : {}) };
-        existing.reason = reason;
-        existing.updatedAt = new Date().toISOString();
-      } else {
-        pending.push({ id: crypto.randomBytes(8).toString("hex"), type: "new_game", status: "pending", createdAt: new Date().toISOString(), reason, data: { title, category, mode, risk, hours, note, ...(rank != null ? { rank } : {}) } });
-      }
-      writeJSON("pending.json", pending);
+      const { title, category, reason } = args;
+      queue("new_game", args, reason, readJSON, writeJSON);
       return { content: [{ type: "text", text: `New game suggestion queued: "${title}" → ${category}. Awaiting user approval.` }] };
     }
 
@@ -134,14 +85,22 @@ function createMcpRouter({ readJSON, writeJSON }) {
   function buildServer() {
     const server = new Server(
       { name: "gamebacklog", version: "1.0.0" },
-      { capabilities: { tools: {} } }
+      {
+        capabilities: { tools: {} },
+        instructions:
+          "This server manages the user's personal game backlog. " +
+          "Categories: inbox, queue, caveats, decompression, yourCall, played. " +
+          "The inbox category holds games the user added themselves and has not yet triaged. " +
+          "When the user asks to sort, triage, process, or clear the inbox — or starts a conversation without a specific request — call get_game_library, then propose moves out of inbox using suggest_game_move. " +
+          "All write actions are suggestions only; the user reviews and approves them in the Pending tab."
+      }
     );
 
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: [
         {
           name: "get_game_library",
-          description: "Get the user's full game library with titles, ranks, categories, modes, risk levels, hours, and notes",
+          description: "Get the user's full game library with titles, ranks, categories, modes, risk levels, hours, and notes. The 'inbox' category lists games the user added themselves and is asking you to triage — when present, propose moves out of inbox into the appropriate destination category using suggest_game_move.",
           inputSchema: { type: "object", properties: {} }
         },
         {
@@ -156,8 +115,8 @@ function createMcpRouter({ readJSON, writeJSON }) {
             type: "object",
             properties: {
               title:        { type: "string", description: "Exact game title" },
-              fromCategory: { type: "string", description: "One of: queue, caveats, decompression, yourCall, played. Definitions:\nqueue — no friction, ready to play, ranked by priority;\ncaveats — specific identified friction point, paired with risk level (low/medium/high);\ndecompression — low-investment wind-down, no narrative commitment required, not a lower tier;\nyourCall — mismatch signal holding pen; initial categorization feels wrong based on new information or gut; audit periodically to update taste profile; also catch-all for genuinely unclear placements;\nplayed — completed or bounced from" },
-              toCategory:   { type: "string", description: "One of: queue, caveats, decompression, yourCall, played. Definitions:\nqueue — no friction, ready to play, ranked by priority;\ncaveats — specific identified friction point, paired with risk level (low/medium/high);\ndecompression — low-investment wind-down, no narrative commitment required, not a lower tier;\nyourCall — mismatch signal holding pen; initial categorization feels wrong based on new information or gut; audit periodically to update taste profile; also catch-all for genuinely unclear placements;\nplayed — completed or bounced from" },
+              fromCategory: { type: "string", description: "One of: inbox, queue, caveats, decompression, yourCall, played. Definitions:\ninbox — user-added games waiting for you to triage; always check this category first when the conversation starts and propose moves out of it into the right destination;\nqueue — no friction, ready to play, ranked by priority;\ncaveats — specific identified friction point, paired with risk level (low/medium/high);\ndecompression — low-investment wind-down, no narrative commitment required, not a lower tier;\nyourCall — mismatch signal holding pen; initial categorization feels wrong based on new information or gut; audit periodically to update taste profile; also catch-all for genuinely unclear placements;\nplayed — completed or bounced from" },
+              toCategory:   { type: "string", description: "One of: inbox, queue, caveats, decompression, yourCall, played. Definitions:\ninbox — user-added games waiting for you to triage; always check this category first when the conversation starts and propose moves out of it into the right destination;\nqueue — no friction, ready to play, ranked by priority;\ncaveats — specific identified friction point, paired with risk level (low/medium/high);\ndecompression — low-investment wind-down, no narrative commitment required, not a lower tier;\nyourCall — mismatch signal holding pen; initial categorization feels wrong based on new information or gut; audit periodically to update taste profile; also catch-all for genuinely unclear placements;\nplayed — completed or bounced from" },
               rank:         { type: "integer", description: "Desired rank position within the target category (1 = highest priority). If omitted, appends to the end." },
               reason:       { type: "string", description: "Explanation for the suggested move" }
             },
@@ -187,6 +146,7 @@ function createMcpRouter({ readJSON, writeJSON }) {
               mode:   { type: "string", description: "Corrected mode/genre: atmospheric, narrative, detective, tactical, immersive, action, strategy, puzzle, rpg" },
               hours:  { type: "string", description: "Corrected hours estimate e.g. '10' or '8-12'" },
               note:   { type: "string", description: "Replacement note for the game" },
+              url:    { type: "string", description: "Store URL — Steam preferred when available, otherwise PlayStation Store" },
               reason: { type: "string", description: "Why this edit improves the entry" }
             },
             required: ["title", "reason"]
@@ -199,11 +159,12 @@ function createMcpRouter({ readJSON, writeJSON }) {
             type: "object",
             properties: {
               title:    { type: "string" },
-              category: { type: "string", description: "Category to place the game in. Definitions:\nqueue — no meaningful friction or risk flags; game is ready to play and ranked by priority; both short and long games belong here if the experience justifies the time;\ncaveats — game is wanted but has a specific identified friction point (mechanical difficulty, scope/obligation risk, ambiguous loss states, loop-first gameplay); always paired with a risk level (low/medium/high);\ndecompression — played in a low-investment no-narrative-commitment headspace; palate cleansers and wind-down sessions; NOT a lower quality tier, just a different mode of play;\nyourCall — mismatch signal holding pen: game was initially placed in caveats or decompression but something shifted (gut feeling, prior series experience, or post-play reaction) suggesting it belongs higher; the mismatch is data and should be used to refine the taste profile on audit; also used as catch-all when placement is genuinely unclear and a decision should not be forced" },
+              category: { type: "string", description: "Category to place the game in. Definitions:\ninbox — only used for games the user added themselves but hasn't asked you to triage; you generally do NOT suggest_new_game directly into inbox;\nqueue — no meaningful friction or risk flags; game is ready to play and ranked by priority; both short and long games belong here if the experience justifies the time;\ncaveats — game is wanted but has a specific identified friction point (mechanical difficulty, scope/obligation risk, ambiguous loss states, loop-first gameplay); always paired with a risk level (low/medium/high);\ndecompression — played in a low-investment no-narrative-commitment headspace; palate cleansers and wind-down sessions; NOT a lower quality tier, just a different mode of play;\nyourCall — mismatch signal holding pen: game was initially placed in caveats or decompression but something shifted (gut feeling, prior series experience, or post-play reaction) suggesting it belongs higher; the mismatch is data and should be used to refine the taste profile on audit; also used as catch-all when placement is genuinely unclear and a decision should not be forced" },
               mode:     { type: "string", description: "atmospheric, narrative, detective, tactical, immersive, action, strategy, puzzle, rpg" },
               risk:     { type: "string", description: "low, medium, high (for caveats category)" },
               hours:    { type: "string", description: "Estimated hours e.g. '10' or '8-12'" },
               note:     { type: "string", description: "Notes about the game and fit" },
+              url:      { type: "string", description: "Store URL — Steam preferred when available, otherwise PlayStation Store" },
               rank:     { type: "integer", description: "Desired rank position within the category (1 = highest priority). If omitted, appends to the end." },
               reason:   { type: "string", description: "Why this game fits the user's profile" }
             },

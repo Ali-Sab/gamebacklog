@@ -147,6 +147,34 @@
   .game-note-editable:hover { color: var(--sub) !important; }
   .rank-btn { font-family: var(--mono); font-size: 10px; padding: 1px 5px; border-radius: 2px; border: 1px solid var(--border2); color: var(--muted); background: transparent; cursor: pointer; line-height: 1.4; }
   .rank-btn:hover { color: var(--text); border-color: var(--sub); }
+  .rank-input { width: 38px; font-family: var(--mono); font-size: 11px; padding: 1px 4px; border-radius: 3px; border: 1px solid var(--border2); background: var(--surface); color: var(--text); text-align: center; }
+  .rank-input:focus { outline: none; border-color: var(--gold); }
+  .game-link { color: var(--blue); text-decoration: none; font-size: 12px; margin-left: 6px; opacity: 0.7; }
+  .game-link:hover { opacity: 1; text-decoration: underline; }
+  .row-edit-btn, .row-delete-btn { font-size: 11px; padding: 2px 7px; border-radius: 4px; border: 1px solid var(--border2); background: transparent; cursor: pointer; color: var(--muted); }
+  .row-edit-btn:hover { color: var(--text); border-color: var(--sub); }
+  .row-delete-btn { color: var(--red); border-color: #f8717130; }
+  .row-delete-btn:hover { background: #f8717115; }
+
+  /* Modal */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .modal { background: var(--bg); border: 1px solid var(--border2); border-radius: 10px; padding: 28px 32px; width: 440px; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); overflow-y: auto; }
+  .modal-title { font-size: 15px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
+  .modal-sub { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
+  .modal-row { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
+
+  /* Toast */
+  #toast-container { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
+  .toast { background: var(--surface); border: 1px solid var(--border2); border-radius: 6px; padding: 10px 16px; display: flex; align-items: center; gap: 14px; font-size: 13px; color: var(--text); box-shadow: 0 4px 16px rgba(0,0,0,0.4); pointer-events: auto; animation: toast-in 0.18s ease-out; }
+  .toast button { font-size: 12px; color: var(--gold); padding: 2px 8px; border: 1px solid var(--gold); border-radius: 4px; background: transparent; cursor: pointer; }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+  /* Sort dropdown */
+  .sort-select { background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: 12px; padding: 4px 8px; border-radius: 6px; }
+
+  /* Inbox banner */
+  .inbox-hint { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--gold); border-radius: 6px; padding: 12px 16px; margin-bottom: 14px; font-size: 13px; color: var(--sub); line-height: 1.6; }
+  .inbox-hint strong { color: var(--text); font-weight: 500; }
 </style>
 </head>
 <body>
@@ -244,6 +272,7 @@
         </div>
         <div id="normal-games-view">
           <div class="cat-tabs">
+            <button class="cat-btn"        data-cat="inbox"         onclick="switchCat('inbox')">Inbox <span id="cnt-inbox"></span></button>
             <button class="cat-btn active" data-cat="queue"         onclick="switchCat('queue')">Play Queue <span id="cnt-queue"></span></button>
             <button class="cat-btn"        data-cat="caveats"       onclick="switchCat('caveats')">With Caveats <span id="cnt-caveats"></span></button>
             <button class="cat-btn"        data-cat="decompression" onclick="switchCat('decompression')">Decompression <span id="cnt-decompression"></span></button>
@@ -255,6 +284,15 @@
             <input class="search-input" id="game-search" placeholder="Search this list…" oninput="renderGames()">
             <span id="mode-filters"></span>
             <span id="risk-filters"></span>
+            <span style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+              <select class="sort-select" id="game-sort" onchange="onSortChange(this.value)">
+                <option value="rank">Sort: Rank</option>
+                <option value="hours">Sort: Hours</option>
+                <option value="title">Sort: Title</option>
+                <option value="playedDate">Sort: Date Played</option>
+              </select>
+              <button class="btn btn-ghost btn-sm" onclick="openAddGame()">+ Add Game</button>
+            </span>
           </div>
         </div>
         <div id="global-results-header" class="global-results-header hidden">
@@ -321,6 +359,16 @@
           <button class="btn btn-danger" onclick="logout()">Log Out + Clear Session</button>
         </div>
         <div class="settings-section">
+          <div class="settings-title">Backup &amp; Restore</div>
+          <div class="settings-desc">Download a JSON snapshot of your library and profile, or restore from one. Import replaces all current data.</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost" onclick="downloadExport()">Download JSON</button>
+            <button class="btn btn-ghost" onclick="document.getElementById('import-file').click()">Import JSON…</button>
+            <input type="file" id="import-file" accept="application/json,.json" style="display:none" onchange="onImportFile(event)">
+          </div>
+          <div id="import-msg" class="hidden" style="margin-top:8px;"></div>
+        </div>
+        <div class="settings-section">
           <div class="settings-title">Connect Claude</div>
           <div class="settings-desc">To connect Claude.ai to your game library via MCP:</div>
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 22px;font-size:13px;line-height:2.0;color:var(--sub);">
@@ -337,6 +385,9 @@
     </div>
   </div>
 </div>
+
+<div id="modal-root"></div>
+<div id="toast-container"></div>
 
 <script>
 // ═══════════════════════════════════════════════════════════
@@ -595,10 +646,16 @@ function switchTab(tab) {
 
 function switchCat(cat) {
   activeCat = cat; modeFilter = null; riskFilter = null; editingNote = null;
+  // Default sort: played → date played; everything else → rank
+  sortBy = (cat === 'played') ? 'playedDate' : 'rank';
+  const sortEl = document.getElementById('game-sort');
+  if (sortEl) sortEl.value = sortBy;
   document.querySelectorAll('.cat-btn').forEach(b => b.classList.toggle('active', b.dataset.cat === cat));
   renderFilters();
   renderGames();
 }
+
+function onSortChange(val) { sortBy = val; renderGames(); }
 
 // ═══════════════════════════════════════════════════════════
 // RENDER
@@ -617,7 +674,8 @@ const RISK_COLORS = { low:'#86efac', medium:'#fbbf24', high:'#f87171' };
 const RISK_COLORS_LIGHT = { low:'#1a6b40', medium:'#7a5800', high:'#b02020' };
 const TYPE_COLORS = { game_move:'#7dd3fc', profile_update:'#f9a8d4', new_game:'#86efac', reorder:'#c4b5fd', game_edit:'#fde68a' };
 const TYPE_COLORS_LIGHT = { game_move:'#1565a8', profile_update:'#a0237a', new_game:'#1a6b40', reorder:'#5032b0', game_edit:'#7a5800' };
-const CAT_LABELS  = { queue:'Play Queue', caveats:'With Caveats', decompression:'Decompression', yourCall:'Your Call', played:'Played' };
+const CAT_LABELS  = { inbox:'Inbox', queue:'Play Queue', caveats:'With Caveats', decompression:'Decompression', yourCall:'Your Call', played:'Played' };
+let sortBy = 'rank';
 
 function renderAll() {
   updateMeta();
@@ -661,11 +719,34 @@ function renderFilters() {
 function toggleMode(k) { modeFilter = modeFilter===k ? null : k; renderFilters(); renderGames(); }
 function toggleRisk(r) { riskFilter = riskFilter===r ? null : r; renderFilters(); renderGames(); }
 
-const CAT_COLORS = { queue:'#7eb8d4', caveats:'#e8c547', decompression:'#b8d47e', yourCall:'#e8a87c', played:'#a8a8a8' };
+const CAT_COLORS = { inbox:'#c4b5fd', queue:'#7eb8d4', caveats:'#e8c547', decompression:'#b8d47e', yourCall:'#e8a87c', played:'#a8a8a8' };
+
+function parseHours(h) {
+  const n = parseFloat((h||'').replace(/[~+∞]/g,'').split(/[–-]/)[0]);
+  return isNaN(n) ? null : n;
+}
+
+function sortGames(list, mode) {
+  const arr = [...list];
+  if (mode === 'hours') {
+    arr.sort((a,b) => (parseHours(a.hours) ?? Infinity) - (parseHours(b.hours) ?? Infinity));
+  } else if (mode === 'title') {
+    arr.sort((a,b) => a.title.localeCompare(b.title));
+  } else if (mode === 'playedDate') {
+    arr.sort((a,b) => {
+      const da = a.playedDate ? new Date(a.playedDate).getTime() : 0;
+      const db = b.playedDate ? new Date(b.playedDate).getTime() : 0;
+      return db - da; // newest first
+    });
+  } else {
+    arr.sort((a,b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
+  }
+  return arr;
+}
 
 function renderGames() {
   const search = (document.getElementById('game-search')?.value||'').toLowerCase();
-  const sorted = [...(appGames[activeCat]||[])].sort((a,b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
+  const sorted = sortGames(appGames[activeCat]||[], sortBy);
   const list = sorted.filter(g => {
     if (search && !g.title.toLowerCase().includes(search) && !(g.note||'').toLowerCase().includes(search)) return false;
     if (modeFilter && g.mode !== modeFilter) return false;
@@ -673,12 +754,42 @@ function renderGames() {
     return true;
   });
 
-  const cols = '32px 1fr 54px 100px 1.6fr 110px';
-  const headers = ['#','Game','Hours','Mode','Notes',''];
+  // Inbox uses a simpler layout — no rank, no move-to dropdown, only edit/delete.
+  // Played hides "✓ Played" button.
+  const isInbox = activeCat === 'inbox';
+
+  // Persistent banner explaining what Inbox is for — shown above the table whenever
+  // the user is on this tab so a returning user isn't left guessing.
+  const inboxHintEl = document.getElementById('inbox-hint');
+  if (isInbox) {
+    const count = (appGames.inbox || []).length;
+    const hintHtml = count === 0
+      ? `<strong>Inbox</strong> — a holding pen for games you've added but haven't triaged yet. Use <strong>+ Add Game</strong> to drop one here, then ask Claude (Settings → Connect Claude) to sort them into the right category on your next conversation.`
+      : `<strong>${count} game${count === 1 ? '' : 's'} waiting for triage.</strong> Open Claude (Settings → Connect Claude) and ask it to sort your inbox — it will read these games and queue moves for you to approve in the Pending tab. You can also delete anything you added by mistake.`;
+    if (inboxHintEl) {
+      inboxHintEl.innerHTML = hintHtml;
+    } else {
+      const banner = document.createElement('div');
+      banner.id = 'inbox-hint';
+      banner.className = 'inbox-hint';
+      banner.innerHTML = hintHtml;
+      document.getElementById('game-table').before(banner);
+    }
+  } else if (inboxHintEl) {
+    inboxHintEl.remove();
+  }
+
+  const cols = isInbox
+    ? '1fr 54px 100px 1.6fr 110px'
+    : '54px 1fr 54px 100px 1.6fr 110px';
+  const headers = isInbox
+    ? ['Game','Hours','Mode','Notes','']
+    : ['#','Game','Hours','Mode','Notes',''];
 
   const table = document.getElementById('game-table');
   if (list.length === 0) {
-    table.innerHTML = `<div class="empty-state">No games match</div>`; return;
+    table.innerHTML = `<div class="empty-state">${isInbox ? 'Nothing here yet.' : 'No games match'}</div>`;
+    return;
   }
 
   const cats = Object.keys(CAT_LABELS);
@@ -700,11 +811,25 @@ function renderGames() {
              </div>
            </div>`
         : `<div class="game-note game-note-editable" onclick="startEditNote('${g.id}','${activeCat}')" title="Click to edit">${g.note ? esc(g.note) : '<span style="opacity:0.25;font-style:normal;">add note…</span>'}</div>`;
+      const rankCol = isInbox ? '' : `
+        <div style="display:flex;flex-direction:column;align-items:center;gap:3px;padding-top:1px;">
+          <div class="game-rank${i<5?' top':''}">${String(i+1).padStart(2,'0')}</div>
+          ${sortBy === 'rank'
+            ? `<input type="number" class="rank-input" min="1" value="${i+1}" title="Set rank — press Enter" onkeydown="if(event.key==='Enter'){setRank('${g.id}','${activeCat}',parseInt(this.value,10))}">`
+            : ''}
+        </div>`;
+      const linkHtml = g.url ? ` <a class="game-link" href="${esc(g.url)}" target="_blank" rel="noopener" title="${esc(g.url)}">↗</a>` : '';
+      const moveSelect = isInbox ? '' : `<select onchange="moveGame('${g.id}','${activeCat}',this.value);this.value='${activeCat}'">
+              ${cats.filter(c => c !== 'played' && c !== 'inbox').map(c => `<option value="${c}"${c===activeCat?' selected':''}>${CAT_LABELS[c]}</option>`).join('')}
+            </select>`;
+      const playedBtn = (activeCat !== 'played' && !isInbox)
+        ? `<button class="action-btn action-played" onclick="markPlayed('${g.id}','${activeCat}')">✓ Played</button>`
+        : '';
       return `
         <div class="game-row" style="grid-template-columns:${cols}">
-          <div class="game-rank${i<5?' top':''}">${String(i+1).padStart(2,'0')}</div>
+          ${rankCol}
           <div>
-            <div class="game-title">${esc(g.title)}</div>
+            <div class="game-title">${esc(g.title)}${linkHtml}</div>
             ${g.playedDate ? `<div style="font-size:12px;color:var(--muted);margin-top:3px;">Played ${g.playedDate}</div>` : ''}
           </div>
           <div class="game-hours">${g.hours||'?'}h</div>
@@ -713,15 +838,13 @@ function renderGames() {
             ${g.risk ? `<div><span class="tag" style="${tagStyle(riskColor)}">${g.risk} risk</span></div>` : ''}
           </div>
           ${noteHtml}
-          <div class="game-actions" style="display:flex;flex-direction:column;align-items:center;gap:4px;">
-            <div style="display:flex;gap:3px;">
-              <button class="rank-btn" onclick="moveRank('${g.id}','${activeCat}',-1)" title="Move up">↑</button>
-              <button class="rank-btn" onclick="moveRank('${g.id}','${activeCat}',1)" title="Move down">↓</button>
+          <div class="game-actions" style="display:flex;flex-direction:column;align-items:stretch;gap:4px;">
+            ${playedBtn}
+            ${moveSelect}
+            <div style="display:flex;gap:4px;">
+              <button class="row-edit-btn" style="flex:1;" onclick="openEditGame('${g.id}','${activeCat}')">Edit</button>
+              <button class="row-delete-btn" onclick="deleteGameConfirm('${g.id}','${activeCat}')" title="Delete">✕</button>
             </div>
-            ${activeCat !== 'played' ? `<button class="action-btn action-played" onclick="markPlayed('${g.id}','${activeCat}')">✓ Played</button>` : ''}
-            <select onchange="moveGame('${g.id}','${activeCat}',this.value);this.value='${activeCat}'">
-              ${cats.filter(c => c !== 'played').map(c => `<option value="${c}"${c===activeCat?' selected':''}>${CAT_LABELS[c]}</option>`).join('')}
-            </select>
           </div>
         </div>`;
     }).join('')}`;
@@ -861,21 +984,212 @@ function nextRank(cat) {
   return ((appGames[cat]||[]).reduce((m,g) => Math.max(m, g.rank||0), 0)) + 1;
 }
 
+function snapshotGames() {
+  return JSON.parse(JSON.stringify(appGames));
+}
+
 function moveGame(id, fromCat, toCat) {
   if (fromCat === toCat) return;
   const game = (appGames[fromCat]||[]).find(g => g.id === id);
   if (!game) return;
+  const before = snapshotGames();
   appGames[fromCat] = appGames[fromCat].filter(g => g.id !== id);
   appGames[toCat] = [...(appGames[toCat]||[]), {...game, rank: nextRank(toCat)}];
   saveData(); updateMeta(); renderGames();
+  showToast(`Moved “${game.title}” to ${CAT_LABELS[toCat]||toCat}`, () => restoreGames(before));
 }
 
 function markPlayed(id, fromCat) {
   const game = (appGames[fromCat]||[]).find(g => g.id === id);
   if (!game) return;
+  const before = snapshotGames();
   appGames[fromCat] = appGames[fromCat].filter(g => g.id !== id);
   appGames.played = [...(appGames.played||[]), {...game, rank: nextRank('played'), playedDate: new Date().toLocaleDateString()}];
   saveData(); updateMeta(); renderGames();
+  showToast(`Marked “${game.title}” as played`, () => restoreGames(before));
+}
+
+function restoreGames(prev) {
+  appGames = prev;
+  saveData(); updateMeta(); renderGames();
+}
+
+// ── Set rank by typing a number ──────────────────────────────
+function setRank(id, cat, newRank) {
+  if (!Number.isFinite(newRank) || newRank < 1) return;
+  const list = [...(appGames[cat]||[])].sort((a,b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
+  const idx = list.findIndex(g => g.id === id);
+  if (idx === -1) return;
+  const before = snapshotGames();
+  const target = Math.min(newRank, list.length);
+  if (target === idx + 1) return; // no change
+  const [moved] = list.splice(idx, 1);
+  list.splice(target - 1, 0, moved);
+  list.forEach((g, i) => { g.rank = i + 1; });
+  appGames[cat] = list;
+  saveData(); renderGames();
+  showToast(`Moved “${moved.title}” to rank ${target}`, () => restoreGames(before));
+}
+
+// ── Add / Edit / Delete games ────────────────────────────────
+function openAddGame() {
+  openGameModal({
+    title: 'Add Game',
+    sub: 'New games go to Inbox. Claude will sort them on your next conversation.',
+    initial: {},
+    onSubmit: (fields) => {
+      if (!fields.title.trim()) return false;
+      const id = 'usr-' + Math.random().toString(16).slice(2, 10);
+      appGames.inbox = [...(appGames.inbox||[]), { id, ...fields, title: fields.title.trim() }];
+      saveData(); updateMeta(); renderGames();
+      showToast(`Added “${fields.title.trim()}” to Inbox`);
+      return true;
+    }
+  });
+}
+
+function openEditGame(id, cat) {
+  const game = (appGames[cat]||[]).find(g => g.id === id);
+  if (!game) return;
+  openGameModal({
+    title: 'Edit Game',
+    sub: `Editing fields on “${game.title}”`,
+    initial: game,
+    onSubmit: (fields) => {
+      if (!fields.title.trim()) return false;
+      const before = snapshotGames();
+      appGames[cat] = appGames[cat].map(g => g.id === id ? { ...g, ...fields, title: fields.title.trim() } : g);
+      saveData(); renderGames();
+      showToast(`Saved changes to “${fields.title.trim()}”`, () => restoreGames(before));
+      return true;
+    }
+  });
+}
+
+function deleteGameConfirm(id, cat) {
+  const game = (appGames[cat]||[]).find(g => g.id === id);
+  if (!game) return;
+  openModal(`
+    <div class="modal-title">Delete game</div>
+    <div class="modal-sub">This permanently removes <strong>${esc(game.title)}</strong> from your library. You can undo from the toast.</div>
+    <div class="modal-row">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger" id="confirm-delete-btn">Delete</button>
+    </div>`, () => {
+    document.getElementById('confirm-delete-btn').onclick = () => {
+      const before = snapshotGames();
+      appGames[cat] = appGames[cat].filter(g => g.id !== id);
+      closeModal();
+      saveData(); updateMeta(); renderGames();
+      showToast(`Deleted “${game.title}”`, () => restoreGames(before));
+    };
+  });
+}
+
+function openGameModal({ title, sub, initial, onSubmit }) {
+  const modeOptions = ['', ...Object.keys(MODES)];
+  const riskOptions = ['', 'low', 'medium', 'high'];
+  const html = `
+    <div class="modal-title">${esc(title)}</div>
+    <div class="modal-sub">${esc(sub)}</div>
+    <div class="field"><label>Title</label><input id="gm-title" value="${esc(initial.title||'')}" placeholder="Game title"></div>
+    <div style="display:flex;gap:10px;">
+      <div class="field" style="flex:1;"><label>Mode</label>
+        <select id="gm-mode" style="width:100%;padding:9px 10px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;">
+          ${modeOptions.map(m => `<option value="${m}"${(initial.mode||'')===m?' selected':''}>${m||'(none)'}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field" style="flex:1;"><label>Risk</label>
+        <select id="gm-risk" style="width:100%;padding:9px 10px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;">
+          ${riskOptions.map(r => `<option value="${r}"${(initial.risk||'')===r?' selected':''}>${r||'(none)'}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field" style="width:90px;"><label>Hours</label><input id="gm-hours" value="${esc(initial.hours||'')}" placeholder="10"></div>
+    </div>
+    <div class="field"><label>Store URL (Steam, or PlayStation Store)</label><input id="gm-url" value="${esc(initial.url||'')}" placeholder="https://store.steampowered.com/app/…"></div>
+    <div class="field"><label>Note</label><textarea id="gm-note" style="min-height:60px;">${esc(initial.note||'')}</textarea></div>
+    <div class="modal-row">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-gold" id="gm-save">Save</button>
+    </div>`;
+  openModal(html, () => {
+    document.getElementById('gm-save').onclick = () => {
+      const fields = {
+        title: document.getElementById('gm-title').value,
+        mode:  document.getElementById('gm-mode').value || undefined,
+        risk:  document.getElementById('gm-risk').value || undefined,
+        hours: document.getElementById('gm-hours').value || undefined,
+        url:   document.getElementById('gm-url').value.trim() || undefined,
+        note:  document.getElementById('gm-note').value || undefined,
+      };
+      if (onSubmit(fields) !== false) closeModal();
+    };
+  });
+}
+
+// ── Modal & toast plumbing ───────────────────────────────────
+function openModal(html, afterMount) {
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `<div class="modal-backdrop" onclick="if(event.target===this)closeModal()"><div class="modal">${html}</div></div>`;
+  if (afterMount) afterMount();
+}
+function closeModal() {
+  document.getElementById('modal-root').innerHTML = '';
+}
+
+let toastSeq = 0;
+function showToast(msg, undoFn) {
+  const id = ++toastSeq;
+  const wrap = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.dataset.id = id;
+  el.innerHTML = `<span>${esc(msg)}</span>${undoFn ? `<button>Undo</button>` : ''}`;
+  if (undoFn) el.querySelector('button').onclick = () => { undoFn(); el.remove(); };
+  wrap.appendChild(el);
+  setTimeout(() => { if (el.parentNode) el.remove(); }, 6000);
+}
+
+// ── Backup & Restore ─────────────────────────────────────────
+async function downloadExport() {
+  const res = await fetch(`${API_BASE}/api/export`, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) { showToast('Export failed'); return; }
+  const blob = await res.blob();
+  const cd = res.headers.get('Content-Disposition') || '';
+  const m = cd.match(/filename="?([^"]+)"?/);
+  const fname = m ? m[1] : 'gamebacklog.json';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+}
+
+async function onImportFile(event) {
+  const file = event.target.files?.[0];
+  event.target.value = '';
+  if (!file) return;
+  const text = await file.text();
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { return showImportMsg('error', 'Not valid JSON'); }
+  if (!parsed.games) return showImportMsg('error', 'File is missing a "games" field');
+  if (!confirm('This will replace ALL current games and profile data with the contents of this file. Continue?')) return;
+  try {
+    await api('POST', '/api/import', { games: parsed.games, profile: parsed.profile });
+    appGames = parsed.games;
+    if (parsed.profile != null) appProfile = parsed.profile;
+    showImportMsg('success', 'Import complete.');
+    renderAll();
+  } catch (e) {
+    showImportMsg('error', e.message || 'Import failed');
+  }
+}
+
+function showImportMsg(kind, text) {
+  const el = document.getElementById('import-msg');
+  el.className = kind === 'error' ? 'error-msg' : 'success-msg';
+  el.textContent = text;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -958,7 +1272,7 @@ function renderPendingBadge() {
     else badge.classList.add('hidden');
   }
   const approveAllBtn = document.getElementById('approve-all-btn');
-  if (approveAllBtn) approveAllBtn.style.display = pendingItems.length > 1 ? '' : 'none';
+  if (approveAllBtn) approveAllBtn.style.display = pendingItems.length >= 1 ? '' : 'none';
 }
 
 function renderPendingTab() {
@@ -1081,6 +1395,7 @@ async function logout() {
 // ═══════════════════════════════════════════════════════════
 function getInitialGames() {
   return {
+    inbox: [],
     queue: [
       {id:'q1', title:'Clair Obscur: Expedition 33', hours:'30', mode:'rpg', note:'Buy today. Each year the Paintress paints a number and everyone of that age dies — singular, urgent, devastating from minute one. GOTY 2025. Omori-tier OST, ~30h that don\'t overstay, switchable difficulty at any time.'},
       {id:'q2', title:'Limbo', hours:'3', mode:'atmospheric', note:'Predecessor to Inside — same studio, wordless atmospheric design. Natural companion piece. Space away from DARQ to avoid register saturation.'},

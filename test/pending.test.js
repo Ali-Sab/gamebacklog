@@ -23,6 +23,7 @@ beforeAll(async () => {
 
   // Seed a game library so move/approve tests have something to work with
   const games = {
+    inbox:         [],
     queue:         [{ id: "q1", title: "Hollow Knight", mode: "atmospheric", hours: "40", note: "Essential" }],
     caveats:       [{ id: "c1", title: "Hades", mode: "action", risk: "medium", hours: "22", note: "" }],
     decompression: [],
@@ -275,5 +276,150 @@ describe("approve profile_update", () => {
     const dataRes = await request(app).get("/api/data").set(auth());
     expect(dataRes.body.profile).toContain("SESSION LENGTH");
     expect(dataRes.body.profile).toContain("Prefers sessions under 2 hours.");
+  });
+});
+
+// ─── approve reorder ──────────────────────────────────────────────────────────
+describe("approve reorder", () => {
+  let itemId;
+
+  beforeAll(async () => {
+    // Reset to a known multi-item queue for deterministic ranking
+    await request(app).post("/api/data").set(auth()).send({
+      games: {
+        inbox: [],
+        queue: [
+          { id: "r1", title: "Alpha",   mode: "rpg",      hours: "10", note: "", rank: 1 },
+          { id: "r2", title: "Bravo",   mode: "tactical", hours: "12", note: "", rank: 2 },
+          { id: "r3", title: "Charlie", mode: "action",   hours: "8",  note: "", rank: 3 },
+          { id: "r4", title: "Delta",   mode: "puzzle",   hours: "5",  note: "", rank: 4 }
+        ],
+        caveats: [], decompression: [], yourCall: [], played: []
+      }
+    });
+
+    await execTool("suggest_reorder", {
+      category: "queue",
+      // Reverse the first three; omit Delta to verify it sinks to the bottom
+      rankedTitles: ["Charlie", "Bravo", "Alpha"],
+      reason: "New ranking"
+    }, readJSON, writeJSON);
+
+    const res = await request(app).get("/api/pending").set(auth());
+    itemId = res.body.find(p => p.type === "reorder")?.id;
+  });
+
+  test("approving applies the new ranks, omitted titles sink to bottom", async () => {
+    await request(app).post(`/api/pending/${itemId}/approve`).set(auth()).expect(200);
+    const dataRes = await request(app).get("/api/data").set(auth());
+    const byTitle = Object.fromEntries(dataRes.body.games.queue.map(g => [g.title, g.rank]));
+    expect(byTitle.Charlie).toBe(1);
+    expect(byTitle.Bravo).toBe(2);
+    expect(byTitle.Alpha).toBe(3);
+    // Delta wasn't in rankedTitles — should be ranked after the listed ones (rank 4)
+    expect(byTitle.Delta).toBe(4);
+  });
+
+  test("dedup: second reorder for same category replaces the first", async () => {
+    await execTool("suggest_reorder", {
+      category: "queue",
+      rankedTitles: ["Alpha", "Bravo"],
+      reason: "first"
+    }, readJSON, writeJSON);
+    await execTool("suggest_reorder", {
+      category: "queue",
+      rankedTitles: ["Bravo", "Alpha"],
+      reason: "second"
+    }, readJSON, writeJSON);
+
+    const res = await request(app).get("/api/pending").set(auth());
+    const reorders = res.body.filter(p => p.type === "reorder" && p.data.category === "queue");
+    expect(reorders).toHaveLength(1);
+    expect(reorders[0].data.rankedTitles).toEqual(["Bravo", "Alpha"]);
+    expect(reorders[0].reason).toBe("second");
+  });
+});
+
+// ─── approve-all ──────────────────────────────────────────────────────────────
+describe("POST /api/pending/approve-all", () => {
+  beforeAll(async () => {
+    // Reset state to known seed
+    await request(app).post("/api/data").set(auth()).send({
+      games: {
+        inbox: [],
+        queue: [
+          { id: "a1", title: "Multi A", mode: "rpg",      hours: "10", note: "", rank: 1 },
+          { id: "a2", title: "Multi B", mode: "tactical", hours: "12", note: "", rank: 2 }
+        ],
+        caveats:       [{ id: "a3", title: "Multi C", mode: "action", risk: "medium", hours: "8", note: "", rank: 1 }],
+        decompression: [], yourCall: [], played: []
+      },
+      profile: "CORE\nbaseline."
+    });
+
+    // Clear any leftover pending items by rejecting them all
+    const cur = await request(app).get("/api/pending").set(auth());
+    for (const item of cur.body) {
+      await request(app).post(`/api/pending/${item.id}/reject`).set(auth());
+    }
+
+    // Queue four heterogeneous suggestions
+    await execTool("suggest_game_move", {
+      title: "Multi C", fromCategory: "caveats", toCategory: "queue", reason: "promote"
+    }, readJSON, writeJSON);
+    await execTool("suggest_new_game", {
+      title: "Multi D", category: "decompression", mode: "puzzle", hours: "3", reason: "fits"
+    }, readJSON, writeJSON);
+    await execTool("suggest_game_edit", {
+      title: "Multi A", note: "edited via approve-all", reason: "tighten"
+    }, readJSON, writeJSON);
+    await execTool("suggest_profile_update", {
+      section: "PACING", change: "Short sessions preferred.", reason: "observed"
+    }, readJSON, writeJSON);
+  });
+
+  test("approves every pending item in one call", async () => {
+    const res = await request(app).post("/api/pending/approve-all").set(auth()).expect(200);
+    expect(res.body.approved).toBe(4);
+    expect(res.body.errors).toEqual([]);
+
+    const after = await request(app).get("/api/pending").set(auth());
+    expect(after.body).toEqual([]);
+  });
+
+  test("all four mutations landed", async () => {
+    const dataRes = await request(app).get("/api/data").set(auth());
+    const { games, profile } = dataRes.body;
+
+    // game_move: Multi C now in queue, gone from caveats
+    expect(games.queue.some(g => g.title === "Multi C")).toBe(true);
+    expect(games.caveats.some(g => g.title === "Multi C")).toBe(false);
+
+    // new_game: Multi D in decompression
+    expect(games.decompression.some(g => g.title === "Multi D")).toBe(true);
+
+    // game_edit: Multi A note updated
+    const a = Object.values(games).flat().find(g => g.title === "Multi A");
+    expect(a.note).toBe("edited via approve-all");
+
+    // profile_update: PACING section appended
+    expect(profile).toContain("PACING");
+    expect(profile).toContain("Short sessions preferred.");
+  });
+
+  test("history shows all four as approved", async () => {
+    const res = await request(app).get("/api/pending/history").set(auth()).expect(200);
+    const recentApproved = res.body.filter(p =>
+      p.status === "approved" &&
+      ["Multi A", "Multi C", "Multi D"].some(t => JSON.stringify(p.data).includes(t))
+        || (p.type === "profile_update" && p.data.section === "PACING")
+    );
+    expect(recentApproved.length).toBeGreaterThanOrEqual(4);
+  });
+
+  test("approve-all on empty queue returns approved: 0", async () => {
+    const res = await request(app).post("/api/pending/approve-all").set(auth()).expect(200);
+    expect(res.body.approved).toBe(0);
+    expect(res.body.errors).toEqual([]);
   });
 });

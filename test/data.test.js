@@ -62,6 +62,7 @@ describe("POST /api/data", () => {
 // ─── Round-trip ───────────────────────────────────────────────────────────────
 describe("data round-trip", () => {
   const games = {
+    inbox:         [],
     queue:         [{ id: "q1", title: "Hollow Knight", mode: "atmospheric", hours: "40", note: "Essential" }],
     caveats:       [],
     decompression: [],
@@ -86,5 +87,126 @@ describe("data round-trip", () => {
     const res = await request(app).get("/api/data").set(auth());
     expect(res.body.games).toEqual(games); // unchanged
     expect(res.body.profile).toBe(newProfile);
+  });
+});
+
+// ─── POST /api/data validation ────────────────────────────────────────────────
+describe("POST /api/data validation", () => {
+  // Seed known-good state so we can verify rejected payloads don't corrupt it
+  const goodGames = {
+    inbox: [],
+    queue: [{ id: "v1", title: "Validation Seed", mode: "rpg", hours: "5", note: "" }],
+    caveats: [], decompression: [], yourCall: [], played: []
+  };
+  const goodProfile = "VALIDATION SEED\nbaseline.";
+
+  beforeAll(async () => {
+    await request(app).post("/api/data").set(auth()).send({ games: goodGames, profile: goodProfile });
+  });
+
+  async function expectStateUnchanged() {
+    const res = await request(app).get("/api/data").set(auth());
+    expect(res.body.games).toEqual(goodGames);
+    expect(res.body.profile).toBe(goodProfile);
+  }
+
+  test("rejects games: null", async () => {
+    await request(app).post("/api/data").set(auth()).send({ games: null }).expect(400);
+    await expectStateUnchanged();
+  });
+
+  test("rejects games as a string", async () => {
+    await request(app).post("/api/data").set(auth()).send({ games: "oops" }).expect(400);
+    await expectStateUnchanged();
+  });
+
+  test("rejects games as an array", async () => {
+    await request(app).post("/api/data").set(auth()).send({ games: [] }).expect(400);
+    await expectStateUnchanged();
+  });
+
+  test("rejects games with a non-array category", async () => {
+    await request(app).post("/api/data").set(auth()).send({ games: { queue: "not-a-list" } }).expect(400);
+    await expectStateUnchanged();
+  });
+
+  test("rejects profile as a non-string", async () => {
+    await request(app).post("/api/data").set(auth()).send({ profile: 42 }).expect(400);
+    await expectStateUnchanged();
+  });
+
+  test("empty body is a no-op (200, state preserved)", async () => {
+    await request(app).post("/api/data").set(auth()).send({}).expect(200);
+    await expectStateUnchanged();
+  });
+});
+
+// ─── url field round-trip + inbox category ────────────────────────────────────
+describe("url field and inbox category", () => {
+  test("a game with url survives round-trip", async () => {
+    const games = {
+      inbox: [{ id: "u1", title: "Inbox Item", url: "https://store.steampowered.com/app/123" }],
+      queue: [], caveats: [], decompression: [], yourCall: [], played: []
+    };
+    await request(app).post("/api/data").set(auth()).send({ games }).expect(200);
+    const res = await request(app).get("/api/data").set(auth());
+    expect(res.body.games.inbox).toHaveLength(1);
+    expect(res.body.games.inbox[0].url).toBe("https://store.steampowered.com/app/123");
+  });
+
+  test("readGames returns inbox key even when no games are in inbox", async () => {
+    const games = {
+      queue: [{ id: "q-only", title: "Only Queue", mode: "rpg", hours: "5", note: "" }],
+      caveats: [], decompression: [], yourCall: [], played: []
+    };
+    await request(app).post("/api/data").set(auth()).send({ games }).expect(200);
+    const res = await request(app).get("/api/data").set(auth());
+    expect(res.body.games.inbox).toEqual([]);
+  });
+});
+
+// ─── /api/export ──────────────────────────────────────────────────────────────
+describe("GET /api/export", () => {
+  test("requires auth", async () => {
+    await request(app).get("/api/export").expect(401);
+  });
+
+  test("returns a JSON snapshot with attachment headers", async () => {
+    const res = await request(app).get("/api/export").set(auth()).expect(200);
+    expect(res.headers["content-type"]).toMatch(/application\/json/);
+    expect(res.headers["content-disposition"]).toMatch(/attachment.*gamebacklog-.*\.json/);
+    const body = JSON.parse(res.text);
+    expect(body).toHaveProperty("exportedAt");
+    expect(body).toHaveProperty("games");
+    expect(body).toHaveProperty("profile");
+  });
+});
+
+// ─── /api/import ──────────────────────────────────────────────────────────────
+describe("POST /api/import", () => {
+  test("requires auth", async () => {
+    await request(app).post("/api/import").send({ games: {} }).expect(401);
+  });
+
+  test("rejects payload missing games", async () => {
+    await request(app).post("/api/import").set(auth()).send({ profile: "x" }).expect(400);
+  });
+
+  test("rejects games with non-array category", async () => {
+    await request(app).post("/api/import").set(auth())
+      .send({ games: { queue: "oops" }, profile: "x" }).expect(400);
+  });
+
+  test("replaces all data on success", async () => {
+    const games = {
+      inbox: [{ id: "imp1", title: "Imported Game", url: "https://example.com" }],
+      queue: [], caveats: [], decompression: [], yourCall: [], played: []
+    };
+    await request(app).post("/api/import").set(auth())
+      .send({ games, profile: "IMPORTED PROFILE\nhello." }).expect(200);
+    const res = await request(app).get("/api/data").set(auth());
+    expect(res.body.games.inbox[0].title).toBe("Imported Game");
+    expect(res.body.games.inbox[0].url).toBe("https://example.com");
+    expect(res.body.profile).toBe("IMPORTED PROFILE\nhello.");
   });
 });

@@ -315,6 +315,7 @@ To reset only your game library and profile while keeping your login, use a SQLi
 gamebacklog/
 ├── server.js          # Express server — auth, data API, MCP mount
 ├── mcp-server.js      # MCP tool definitions (read library, suggest changes)
+├── pendingTypes.js    # Shared schema + apply logic for pending suggestions
 ├── db.js              # SQLite init, schema, readJSON/writeJSON wrappers
 ├── package.json
 ├── .env.example       # Environment variable template

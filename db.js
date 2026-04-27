@@ -10,8 +10,9 @@ const db = new Database(DB_PATH);
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 
-// Migrate existing databases that predate the played_date column
+// Migrate existing databases that predate later-added columns
 try { db.exec("ALTER TABLE games ADD COLUMN played_date TEXT"); } catch {}
+try { db.exec("ALTER TABLE games ADD COLUMN url TEXT"); } catch {}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS games (
@@ -23,7 +24,8 @@ db.exec(`
     risk        TEXT,
     hours       TEXT,
     note        TEXT,
-    played_date TEXT
+    played_date TEXT,
+    url         TEXT
   );
 
   CREATE TABLE IF NOT EXISTS profile (
@@ -65,7 +67,7 @@ db.exec(`
 
 // ─── Games ────────────────────────────────────────────────────────────────────
 
-const ALL_CATS = ['queue', 'caveats', 'decompression', 'yourCall', 'played'];
+const ALL_CATS = ['inbox', 'queue', 'caveats', 'decompression', 'yourCall', 'played'];
 
 function readGames() {
   const rows = db.prepare("SELECT * FROM games").all();
@@ -80,18 +82,19 @@ function readGames() {
     if (row.hours       != null) g.hours      = row.hours;
     if (row.note        != null) g.note       = row.note;
     if (row.played_date != null) g.playedDate = row.played_date;
+    if (row.url         != null) g.url        = row.url;
     result[row.category].push(g);
   }
   return result;
 }
 
 const upsertGame = db.prepare(`
-  INSERT INTO games (id, title, category, rank, mode, risk, hours, note, played_date)
-  VALUES (@id, @title, @category, @rank, @mode, @risk, @hours, @note, @played_date)
+  INSERT INTO games (id, title, category, rank, mode, risk, hours, note, played_date, url)
+  VALUES (@id, @title, @category, @rank, @mode, @risk, @hours, @note, @played_date, @url)
   ON CONFLICT(id) DO UPDATE SET
     title=excluded.title, category=excluded.category, rank=excluded.rank,
     mode=excluded.mode, risk=excluded.risk, hours=excluded.hours, note=excluded.note,
-    played_date=excluded.played_date
+    played_date=excluded.played_date, url=excluded.url
 `);
 
 const deleteGame = db.prepare("DELETE FROM games WHERE id = ?");
@@ -107,6 +110,7 @@ function writeGames(gamesObj) {
           rank: g.rank ?? null, mode: g.mode ?? null,
           risk: g.risk ?? null, hours: g.hours ?? null, note: g.note ?? null,
           played_date: g.playedDate ?? null,
+          url: g.url ?? null,
         });
       }
     }
