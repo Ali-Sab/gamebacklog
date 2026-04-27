@@ -278,6 +278,38 @@ app.get("/api/data", requireAuth, (req, res) => {
   res.json({ games, profile });
 });
 
+// Export — downloads a JSON snapshot of games + profile
+app.get("/api/export", requireAuth, (req, res) => {
+  const games   = readJSON("games.json", null);
+  const profile = readJSON("profile.json", null);
+  const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="gamebacklog-${ts}.json"`);
+  res.send(JSON.stringify({ exportedAt: new Date().toISOString(), games, profile }, null, 2));
+});
+
+// Import — replaces all data with the contents of an export file.
+// Same payload validation as POST /api/data, plus required fields.
+app.post("/api/import", requireAuth, (req, res) => {
+  const { games, profile } = req.body || {};
+  if (!games || typeof games !== "object" || Array.isArray(games)) {
+    return res.status(400).json({ error: "games must be an object keyed by category" });
+  }
+  for (const [cat, list] of Object.entries(games)) {
+    if (!Array.isArray(list)) {
+      return res.status(400).json({ error: `games.${cat} must be an array` });
+    }
+  }
+  if (profile != null && typeof profile !== "string") {
+    return res.status(400).json({ error: "profile must be a string or null" });
+  }
+  db.transaction(() => {
+    writeJSON("games.json", games);
+    writeJSON("profile.json", profile ?? "");
+  })();
+  res.json({ ok: true });
+});
+
 // Save all app data
 app.post("/api/data", requireAuth, (req, res) => {
   const { games, profile } = req.body || {};

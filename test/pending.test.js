@@ -23,6 +23,7 @@ beforeAll(async () => {
 
   // Seed a game library so move/approve tests have something to work with
   const games = {
+    inbox:         [],
     queue:         [{ id: "q1", title: "Hollow Knight", mode: "atmospheric", hours: "40", note: "Essential" }],
     caveats:       [{ id: "c1", title: "Hades", mode: "action", risk: "medium", hours: "22", note: "" }],
     decompression: [],
@@ -286,6 +287,7 @@ describe("approve reorder", () => {
     // Reset to a known multi-item queue for deterministic ranking
     await request(app).post("/api/data").set(auth()).send({
       games: {
+        inbox: [],
         queue: [
           { id: "r1", title: "Alpha",   mode: "rpg",      hours: "10", note: "", rank: 1 },
           { id: "r2", title: "Bravo",   mode: "tactical", hours: "12", note: "", rank: 2 },
@@ -344,6 +346,7 @@ describe("POST /api/pending/approve-all", () => {
     // Reset state to known seed
     await request(app).post("/api/data").set(auth()).send({
       games: {
+        inbox: [],
         queue: [
           { id: "a1", title: "Multi A", mode: "rpg",      hours: "10", note: "", rank: 1 },
           { id: "a2", title: "Multi B", mode: "tactical", hours: "12", note: "", rank: 2 }

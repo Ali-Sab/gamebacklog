@@ -177,8 +177,13 @@ test("two suggestions for the same game show only one card", async ({ page }) =>
   }
 });
 
-test("approve-all button is hidden with one pending item, visible with multiple", async ({ page }) => {
-  // One item — button should be hidden
+test("approve-all button is hidden when queue is empty, visible whenever at least one item is pending", async ({ page }) => {
+  // Empty queue — button should be hidden
+  await page.evaluate(() => typeof loadPending === "function" && loadPending());
+  await page.waitForTimeout(300);
+  await expect(page.locator("#approve-all-btn")).toBeHidden();
+
+  // Single item — should appear
   await injectPending(page, {
     id: "aa-single",
     type: "game_move",
@@ -189,9 +194,9 @@ test("approve-all button is hidden with one pending item, visible with multiple"
   });
   await page.evaluate(() => typeof loadPending === "function" && loadPending());
   await page.waitForTimeout(500);
-  await expect(page.locator("#approve-all-btn")).toBeHidden();
+  await expect(page.locator("#approve-all-btn")).toBeVisible();
 
-  // Add a second item — button should appear
+  // Add a second item — still visible
   await injectPending(page, {
     id: "aa-second",
     type: "new_game",

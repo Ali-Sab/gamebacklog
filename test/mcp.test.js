@@ -13,6 +13,7 @@ function json(result) {
 }
 
 const GAMES = {
+  inbox: [],
   queue: [
     { id: "q1", title: "Hollow Knight", mode: "atmospheric", risk: "",       hours: "40", note: "Essential metroidvania" },
     { id: "q2", title: "SOMA",          mode: "atmospheric", risk: "",       hours: "10", note: "Existential horror"     }
