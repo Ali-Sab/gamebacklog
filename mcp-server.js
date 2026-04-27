@@ -17,7 +17,8 @@ async function execTool(name, args = {}, readJSON, writeJSON) {
         const sorted = [...(list || [])].sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
         result[cat] = sorted.map((g, i) => ({
           id: g.id, title: g.title, rank: i + 1,
-          category: cat, mode: g.mode, risk: g.risk, hours: g.hours
+          category: cat, mode: g.mode, risk: g.risk, hours: g.hours,
+          note: g.note || ""
         }));
       }
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
@@ -26,17 +27,6 @@ async function execTool(name, args = {}, readJSON, writeJSON) {
     case "get_taste_profile": {
       const profile = readJSON("profile.json", "");
       return { content: [{ type: "text", text: profile || "(no profile set)" }] };
-    }
-
-    case "get_game_notes": {
-      const { titles = [] } = args;
-      const games = readJSON("games.json", {});
-      const all = Object.values(games).flat();
-      const results = titles.map(t => {
-        const g = all.find(x => x.title.toLowerCase() === t.toLowerCase());
-        return g ? { title: g.title, note: g.note || "" } : { title: t, note: "(not found)" };
-      });
-      return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
     }
 
     case "suggest_reorder": {
@@ -95,6 +85,28 @@ async function execTool(name, args = {}, readJSON, writeJSON) {
       return { content: [{ type: "text", text: `Profile update suggestion queued for section "${section}". Awaiting user approval.` }] };
     }
 
+    case "suggest_game_edit": {
+      const { title, mode, hours, note, reason } = args;
+      const pending = readJSON("pending.json", []);
+      const changes = {};
+      if (mode  !== undefined) changes.mode  = mode;
+      if (hours !== undefined) changes.hours = hours;
+      if (note  !== undefined) changes.note  = note;
+      if (!Object.keys(changes).length) {
+        return { content: [{ type: "text", text: "No changes specified." }] };
+      }
+      const existing = pending.find(p => p.status === "pending" && p.type === "game_edit" && p.data.title.toLowerCase() === title.toLowerCase());
+      if (existing) {
+        existing.data = { title, changes };
+        existing.reason = reason;
+        existing.updatedAt = new Date().toISOString();
+      } else {
+        pending.push({ id: crypto.randomBytes(8).toString("hex"), type: "game_edit", status: "pending", createdAt: new Date().toISOString(), reason, data: { title, changes } });
+      }
+      writeJSON("pending.json", pending);
+      return { content: [{ type: "text", text: `Edit suggestion queued for "${title}" (${Object.keys(changes).join(", ")}). Awaiting user approval.` }] };
+    }
+
     case "suggest_new_game": {
       const { title, category, mode = "", risk = "", hours = "", note = "", rank, reason } = args;
       const pending = readJSON("pending.json", []);
@@ -129,24 +141,13 @@ function createMcpRouter({ readJSON, writeJSON }) {
       tools: [
         {
           name: "get_game_library",
-          description: "Get the user's full game library with titles, ranks, categories, modes and risk levels",
+          description: "Get the user's full game library with titles, ranks, categories, modes, risk levels, hours, and notes",
           inputSchema: { type: "object", properties: {} }
         },
         {
           name: "get_taste_profile",
           description: "Get the user's detailed gaming taste profile",
           inputSchema: { type: "object", properties: {} }
-        },
-        {
-          name: "get_game_notes",
-          description: "Get the detailed notes for one or more specific games by title",
-          inputSchema: {
-            type: "object",
-            properties: {
-              titles: { type: "array", items: { type: "string" }, description: "Array of game titles to fetch notes for" }
-            },
-            required: ["titles"]
-          }
         },
         {
           name: "suggest_game_move",
@@ -174,6 +175,21 @@ function createMcpRouter({ readJSON, writeJSON }) {
               reason:  { type: "string", description: "Explanation for the suggested update" }
             },
             required: ["section", "change", "reason"]
+          }
+        },
+        {
+          name: "suggest_game_edit",
+          description: "Suggest changes to an existing game's mode (genre), hours estimate, or note",
+          inputSchema: {
+            type: "object",
+            properties: {
+              title:  { type: "string", description: "Exact game title as it appears in the library" },
+              mode:   { type: "string", description: "Corrected mode/genre: atmospheric, narrative, detective, tactical, immersive, action, strategy, puzzle, rpg" },
+              hours:  { type: "string", description: "Corrected hours estimate e.g. '10' or '8-12'" },
+              note:   { type: "string", description: "Replacement note for the game" },
+              reason: { type: "string", description: "Why this edit improves the entry" }
+            },
+            required: ["title", "reason"]
           }
         },
         {
@@ -217,6 +233,18 @@ function createMcpRouter({ readJSON, writeJSON }) {
 
     return server;
   }
+
+  // Normalize Accept header — some clients (e.g. Claude.ai connector) omit the
+  // text/event-stream requirement that StreamableHTTPServerTransport enforces.
+  router.use((req, _res, next) => {
+    const accept = req.headers["accept"] || "";
+    if (!accept.includes("text/event-stream")) {
+      req.headers["accept"] = accept
+        ? `${accept}, application/json, text/event-stream`
+        : "application/json, text/event-stream";
+    }
+    next();
+  });
 
   // POST — initialize a new session or handle an existing one
   router.post("/", async (req, res) => {

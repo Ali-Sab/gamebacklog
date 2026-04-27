@@ -178,6 +178,83 @@ describe("approve new_game", () => {
   });
 });
 
+// ─── suggest_game_edit ────────────────────────────────────────────────────────
+describe("suggest_game_edit", () => {
+  test("queues a pending game_edit item", async () => {
+    await execTool("suggest_game_edit", {
+      title: "Hollow Knight",
+      mode: "action",
+      hours: "50",
+      reason: "More action than atmospheric on reflection"
+    }, readJSON, writeJSON);
+
+    const res = await request(app).get("/api/pending").set(auth()).expect(200);
+    const item = res.body.find(p => p.type === "game_edit" && p.data.title === "Hollow Knight");
+    expect(item).toBeDefined();
+    expect(item.status).toBe("pending");
+    expect(item.data.changes.mode).toBe("action");
+    expect(item.data.changes.hours).toBe("50");
+    expect(item.data.changes.note).toBeUndefined();
+  });
+
+  test("second suggestion for same title replaces first", async () => {
+    await execTool("suggest_game_edit", {
+      title: "Hollow Knight",
+      mode: "immersive",
+      reason: "Updated take"
+    }, readJSON, writeJSON);
+
+    const res = await request(app).get("/api/pending").set(auth());
+    const items = res.body.filter(p => p.type === "game_edit" && p.data.title === "Hollow Knight" && p.status === "pending");
+    expect(items).toHaveLength(1);
+    expect(items[0].data.changes.mode).toBe("immersive");
+  });
+
+  test("returns error when no fields are provided", async () => {
+    const result = await execTool("suggest_game_edit", {
+      title: "Hollow Knight",
+      reason: "Nothing to change"
+    }, readJSON, writeJSON);
+    expect(result.content[0].text).toMatch(/no changes/i);
+  });
+});
+
+// ─── approve game_edit ────────────────────────────────────────────────────────
+describe("approve game_edit", () => {
+  let itemId;
+
+  beforeAll(async () => {
+    await execTool("suggest_game_edit", {
+      title: "Hades",
+      mode: "action",
+      hours: "25",
+      note: "Excellent loop",
+      reason: "Refined after reflection"
+    }, readJSON, writeJSON);
+
+    const res = await request(app).get("/api/pending").set(auth());
+    itemId = res.body.find(p => p.type === "game_edit" && p.data.title === "Hades")?.id;
+  });
+
+  test("approving patches the game fields in place", async () => {
+    await request(app).post(`/api/pending/${itemId}/approve`).set(auth()).expect(200);
+    const dataRes = await request(app).get("/api/data").set(auth());
+    const allGames = Object.values(dataRes.body.games).flat();
+    const hades = allGames.find(g => g.title === "Hades");
+    expect(hades).toBeDefined();
+    expect(hades.mode).toBe("action");
+    expect(hades.hours).toBe("25");
+    expect(hades.note).toBe("Excellent loop");
+  });
+
+  test("approved item appears in history", async () => {
+    const res = await request(app).get("/api/pending/history").set(auth()).expect(200);
+    const item = res.body.find(p => p.id === itemId);
+    expect(item.status).toBe("approved");
+    expect(item.approvedAt).toBeDefined();
+  });
+});
+
 // ─── approve profile_update ───────────────────────────────────────────────────
 describe("approve profile_update", () => {
   let itemId;
