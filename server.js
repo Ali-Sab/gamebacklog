@@ -1,16 +1,9 @@
 "use strict";
 
 // ─── Load env ───────────────────────────────────────────────────────────────
-const fs   = require("fs");
 const path = require("path");
-const envPath = path.join(__dirname, ".env");
-if (fs.existsSync(envPath)) {
-  fs.readFileSync(envPath, "utf8").split("\n").forEach(line => {
-    const m = line.match(/^([^#=\s]+)\s*=\s*(.*)$/);
-    // Don't overwrite vars already set in the environment (lets tests inject their own values)
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
-  });
-}
+// dotenv is no-overwrite by default — tests can still inject env vars before require
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const express     = require("express");
 const crypto      = require("crypto");
@@ -19,14 +12,14 @@ const cookieParser = require("cookie-parser");
 const rateLimit   = require("express-rate-limit");
 const QRCode      = require("qrcode");
 const { createMcpRouter } = require("./mcp-server");
-const { readJSON, writeJSON } = require("./db");
+const { db, readJSON, writeJSON } = require("./db");
+const { apply: applyPending } = require("./pendingTypes");
 
 const app  = express();
 app.set("trust proxy", 1); // trust first proxy (Nginx / Tailscale Funnel)
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-in-production";
 const MCP_TOKEN  = process.env.MCP_TOKEN  || "";
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 const IS_PROD  = process.env.NODE_ENV === "production";
 
 
@@ -50,18 +43,6 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-
-// Assign a rank to a game being added to a list.
-// If a target rank is given, shift existing games to make room.
-// If omitted, place at the end.
-function assignRank(list, targetRank) {
-  if (targetRank == null) {
-    const max = list.reduce((m, g) => Math.max(m, g.rank ?? 0), 0);
-    return max + 1;
-  }
-  list.forEach(g => { if ((g.rank ?? Infinity) >= targetRank) g.rank = (g.rank ?? targetRank) + 1; });
-  return targetRank;
-}
 
 // ─── Crypto helpers ──────────────────────────────────────────────────────────
 function hashPassword(password, salt) {
@@ -299,9 +280,25 @@ app.get("/api/data", requireAuth, (req, res) => {
 
 // Save all app data
 app.post("/api/data", requireAuth, (req, res) => {
-  const { games, profile } = req.body;
-  if (games)   writeJSON("games.json", games);
-  if (profile) writeJSON("profile.json", profile);
+  const { games, profile } = req.body || {};
+  // Validate before any writes — refuse partial/empty payloads that would wipe state
+  if (games !== undefined) {
+    if (!games || typeof games !== "object" || Array.isArray(games)) {
+      return res.status(400).json({ error: "games must be an object keyed by category" });
+    }
+    for (const [cat, list] of Object.entries(games)) {
+      if (!Array.isArray(list)) {
+        return res.status(400).json({ error: `games.${cat} must be an array` });
+      }
+    }
+  }
+  if (profile !== undefined && typeof profile !== "string") {
+    return res.status(400).json({ error: "profile must be a string" });
+  }
+  db.transaction(() => {
+    if (games   !== undefined) writeJSON("games.json", games);
+    if (profile !== undefined) writeJSON("profile.json", profile);
+  })();
   res.json({ ok: true });
 });
 
@@ -316,159 +313,70 @@ app.get("/api/pending", requireAuth, (req, res) => {
   res.json(pending.filter(p => p.status === "pending"));
 });
 
+// Read full app state into a mutable ctx for applyPending().
+function loadCtx() {
+  return {
+    games:   readJSON("games.json", {})   || {},
+    profile: readJSON("profile.json", "") || ""
+  };
+}
+
+function persistCtx(ctx) {
+  writeJSON("games.json", ctx.games);
+  writeJSON("profile.json", ctx.profile);
+}
+
 app.post("/api/pending/:id/approve", requireAuth, (req, res) => {
-  const pending = readJSON("pending.json", []);
-  const item = pending.find(p => p.id === req.params.id);
-  if (!item) return res.status(404).json({ error: "Not found" });
-  if (item.status !== "pending") return res.status(400).json({ error: "Not pending" });
   try {
-    if (item.type === "game_move") {
-      const { title, fromCategory, toCategory, rank } = item.data;
-      const games = readJSON("games.json", {});
-      const fromList = games[fromCategory] || [];
-      const idx = fromList.findIndex(g => g.title.toLowerCase() === title.toLowerCase());
-      if (idx !== -1) {
-        const [game] = fromList.splice(idx, 1);
-        games[fromCategory] = fromList;
-        const toList = games[toCategory] || [];
-        game.rank = assignRank(toList, rank);
-        games[toCategory] = [...toList, game];
-        writeJSON("games.json", games);
-      }
-    } else if (item.type === "profile_update") {
-      const { section, change } = item.data;
-      const profile = readJSON("profile.json", "");
-      const header = section.toUpperCase();
-      // Split into chunks at every all-caps section header
-      const sectionRe = /^([A-Z][A-Z\s\/\(\)&+,:'-]+)$/m;
-      const parts = profile.split(/(?=^[A-Z][A-Z\s\/\(\)&+,:'-]+$)/m);
-      const idx = parts.findIndex(p => p.trimStart().startsWith(header));
-      let updated;
-      if (idx !== -1) {
-        // Replace the body of the existing section, keep the header
-        parts[idx] = `${header}\n${change}`;
-        updated = parts.join('').trim();
-      } else {
-        // Section not found — append
-        updated = profile.trim() + `\n\n${header}\n${change}`;
-      }
-      writeJSON("profile.json", updated);
-    } else if (item.type === "new_game") {
-      const { title, category, mode, risk, hours, note, rank } = item.data;
-      const games = readJSON("games.json", {});
-      const id = "mcp-" + crypto.randomBytes(4).toString("hex");
-      const list = games[category] || [];
-      const newRank = assignRank(list, rank);
-      games[category] = [...list, { id, title, mode, risk, hours, note, rank: newRank }];
-      writeJSON("games.json", games);
-    } else if (item.type === "game_edit") {
-      const { title, changes } = item.data;
-      const games = readJSON("games.json", {});
-      for (const list of Object.values(games)) {
-        const game = list.find(g => g.title.toLowerCase() === title.toLowerCase());
-        if (game) { Object.assign(game, changes); break; }
-      }
-      writeJSON("games.json", games);
-    } else if (item.type === "reorder") {
-      const { category, rankedTitles } = item.data;
-      const games = readJSON("games.json", {});
-      const list = games[category] || [];
-      // Assign ranks per the proposed order
-      rankedTitles.forEach((title, i) => {
-        const game = list.find(g => g.title.toLowerCase() === title.toLowerCase());
-        if (game) game.rank = i + 1;
-      });
-      // Games not in the list sink to the bottom, preserving relative order
-      const included = new Set(rankedTitles.map(t => t.toLowerCase()));
-      const unranked = list.filter(g => !included.has(g.title.toLowerCase()))
-        .sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
-      unranked.forEach((g, i) => { g.rank = rankedTitles.length + i + 1; });
-      games[category] = list;
-      writeJSON("games.json", games);
-    }
+    const result = db.transaction(() => {
+      const pending = readJSON("pending.json", []) || [];
+      const item = pending.find(p => p.id === req.params.id);
+      if (!item) return { status: 404, error: "Not found" };
+      if (item.status !== "pending") return { status: 400, error: "Not pending" };
+      const ctx = loadCtx();
+      applyPending(item, ctx);
+      persistCtx(ctx);
+      item.status = "approved";
+      item.approvedAt = new Date().toISOString();
+      writeJSON("pending.json", pending);
+      return { status: 200, pending };
+    })();
+    if (result.status !== 200) return res.status(result.status).json({ error: result.error });
+    res.json(result.pending.filter(p => p.status === "pending"));
   } catch (e) {
     console.error("Approve error:", e);
-    return res.status(500).json({ error: "Failed to apply change" });
+    res.status(500).json({ error: "Failed to apply change" });
   }
-  item.status = "approved";
-  item.approvedAt = new Date().toISOString();
-  writeJSON("pending.json", pending);
-  res.json(pending.filter(p => p.status === "pending"));
 });
 
 app.post("/api/pending/approve-all", requireAuth, (req, res) => {
-  const pending = readJSON("pending.json", []);
-  const toApprove = pending.filter(p => p.status === "pending");
-  const errors = [];
-  for (const item of toApprove) {
-    try {
-      if (item.type === "game_move") {
-        const { title, fromCategory, toCategory, rank } = item.data;
-        const games = readJSON("games.json", {});
-        const fromList = games[fromCategory] || [];
-        const idx = fromList.findIndex(g => g.title.toLowerCase() === title.toLowerCase());
-        if (idx !== -1) {
-          const [game] = fromList.splice(idx, 1);
-          games[fromCategory] = fromList;
-          const toList = games[toCategory] || [];
-          game.rank = assignRank(toList, rank);
-          games[toCategory] = [...toList, game];
-          writeJSON("games.json", games);
+  try {
+    const { approved, errors } = db.transaction(() => {
+      const pending = readJSON("pending.json", []) || [];
+      const toApprove = pending.filter(p => p.status === "pending");
+      const ctx = loadCtx();
+      const errs = [];
+      let ok = 0;
+      for (const item of toApprove) {
+        try {
+          applyPending(item, ctx);
+          item.status = "approved";
+          item.approvedAt = new Date().toISOString();
+          ok++;
+        } catch (e) {
+          console.error("Approve-all error on", item.id, e);
+          errs.push(item.id);
         }
-      } else if (item.type === "profile_update") {
-        const { section, change } = item.data;
-        const header = section.toUpperCase();
-        const profile = readJSON("profile.json", "");
-        const parts = profile.split(/(?=^[A-Z][A-Z\s\/\(\)&+,:'-]+$)/m);
-        const idx = parts.findIndex(p => p.trimStart().startsWith(header));
-        let updated;
-        if (idx !== -1) {
-          parts[idx] = `${header}\n${change}`;
-          updated = parts.join('').trim();
-        } else {
-          updated = profile.trim() + `\n\n${header}\n${change}`;
-        }
-        writeJSON("profile.json", updated);
-      } else if (item.type === "new_game") {
-        const { title, category, mode, risk, hours, note, rank } = item.data;
-        const games = readJSON("games.json", {});
-        const id = "mcp-" + crypto.randomBytes(4).toString("hex");
-        const list = games[category] || [];
-        const newRank = assignRank(list, rank);
-        games[category] = [...list, { id, title, mode, risk, hours, note, rank: newRank }];
-        writeJSON("games.json", games);
-      } else if (item.type === "game_edit") {
-        const { title, changes } = item.data;
-        const games = readJSON("games.json", {});
-        for (const list of Object.values(games)) {
-          const game = list.find(g => g.title.toLowerCase() === title.toLowerCase());
-          if (game) { Object.assign(game, changes); break; }
-        }
-        writeJSON("games.json", games);
-      } else if (item.type === "reorder") {
-        const { category, rankedTitles } = item.data;
-        const games = readJSON("games.json", {});
-        const list = games[category] || [];
-        rankedTitles.forEach((title, i) => {
-          const game = list.find(g => g.title.toLowerCase() === title.toLowerCase());
-          if (game) game.rank = i + 1;
-        });
-        const included = new Set(rankedTitles.map(t => t.toLowerCase()));
-        const unranked = list.filter(g => !included.has(g.title.toLowerCase()))
-          .sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
-        unranked.forEach((g, i) => { g.rank = rankedTitles.length + i + 1; });
-        games[category] = list;
-        writeJSON("games.json", games);
       }
-      item.status = "approved";
-      item.approvedAt = new Date().toISOString();
-    } catch (e) {
-      console.error("Approve-all error on", item.id, e);
-      errors.push(item.id);
-    }
+      persistCtx(ctx);
+      writeJSON("pending.json", pending);
+      return { approved: ok, errors: errs };
+    })();
+    res.json({ approved, errors });
+  } catch (e) {
+    console.error("Approve-all error:", e);
+    res.status(500).json({ error: "Failed to apply changes" });
   }
-  writeJSON("pending.json", pending);
-  res.json({ approved: toApprove.length - errors.length, errors });
 });
 
 app.post("/api/pending/:id/reject", requireAuth, (req, res) => {

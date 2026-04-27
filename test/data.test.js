@@ -88,3 +88,53 @@ describe("data round-trip", () => {
     expect(res.body.profile).toBe(newProfile);
   });
 });
+
+// ─── POST /api/data validation ────────────────────────────────────────────────
+describe("POST /api/data validation", () => {
+  // Seed known-good state so we can verify rejected payloads don't corrupt it
+  const goodGames = {
+    queue: [{ id: "v1", title: "Validation Seed", mode: "rpg", hours: "5", note: "" }],
+    caveats: [], decompression: [], yourCall: [], played: []
+  };
+  const goodProfile = "VALIDATION SEED\nbaseline.";
+
+  beforeAll(async () => {
+    await request(app).post("/api/data").set(auth()).send({ games: goodGames, profile: goodProfile });
+  });
+
+  async function expectStateUnchanged() {
+    const res = await request(app).get("/api/data").set(auth());
+    expect(res.body.games).toEqual(goodGames);
+    expect(res.body.profile).toBe(goodProfile);
+  }
+
+  test("rejects games: null", async () => {
+    await request(app).post("/api/data").set(auth()).send({ games: null }).expect(400);
+    await expectStateUnchanged();
+  });
+
+  test("rejects games as a string", async () => {
+    await request(app).post("/api/data").set(auth()).send({ games: "oops" }).expect(400);
+    await expectStateUnchanged();
+  });
+
+  test("rejects games as an array", async () => {
+    await request(app).post("/api/data").set(auth()).send({ games: [] }).expect(400);
+    await expectStateUnchanged();
+  });
+
+  test("rejects games with a non-array category", async () => {
+    await request(app).post("/api/data").set(auth()).send({ games: { queue: "not-a-list" } }).expect(400);
+    await expectStateUnchanged();
+  });
+
+  test("rejects profile as a non-string", async () => {
+    await request(app).post("/api/data").set(auth()).send({ profile: 42 }).expect(400);
+    await expectStateUnchanged();
+  });
+
+  test("empty body is a no-op (200, state preserved)", async () => {
+    await request(app).post("/api/data").set(auth()).send({}).expect(200);
+    await expectStateUnchanged();
+  });
+});

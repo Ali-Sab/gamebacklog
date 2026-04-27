@@ -5,13 +5,21 @@ const { StreamableHTTPServerTransport } = require("@modelcontextprotocol/sdk/ser
 const { CallToolRequestSchema, ListToolsRequestSchema, ErrorCode, McpError } = require("@modelcontextprotocol/sdk/types.js");
 const express = require("express");
 const crypto  = require("crypto");
+const { createOrUpdate } = require("./pendingTypes");
 
 // ─── Tool implementations (exported for unit testing) ─────────────────────────
+
+function queue(type, args, reason, readJSON, writeJSON) {
+  const pending = readJSON("pending.json", []) || [];
+  const result = createOrUpdate(type, args, reason, pending);
+  writeJSON("pending.json", pending);
+  return result;
+}
 
 async function execTool(name, args = {}, readJSON, writeJSON) {
   switch (name) {
     case "get_game_library": {
-      const games = readJSON("games.json", {});
+      const games = readJSON("games.json", {}) || {};
       const result = {};
       for (const [cat, list] of Object.entries(games)) {
         const sorted = [...(list || [])].sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
@@ -31,94 +39,37 @@ async function execTool(name, args = {}, readJSON, writeJSON) {
 
     case "suggest_reorder": {
       const { category, rankedTitles, reason } = args;
-      const pending = readJSON("pending.json", []);
-      const existing = pending.find(p => p.status === "pending" && p.type === "reorder" && p.data.category === category);
-      if (existing) {
-        existing.data = { category, rankedTitles };
-        existing.reason = reason;
-        existing.updatedAt = new Date().toISOString();
-      } else {
-        pending.push({ id: crypto.randomBytes(8).toString("hex"), type: "reorder", status: "pending", createdAt: new Date().toISOString(), reason, data: { category, rankedTitles } });
-      }
-      writeJSON("pending.json", pending);
+      queue("reorder", { category, rankedTitles }, reason, readJSON, writeJSON);
       return { content: [{ type: "text", text: `Reorder suggestion queued for ${category} (${rankedTitles.length} games). Awaiting user approval.` }] };
     }
 
     case "suggest_game_move": {
       const { title, fromCategory, toCategory, rank, reason } = args;
-      const pending = readJSON("pending.json", []);
-      // If there's a pending new_game for this title, just update its category —
-      // moving a not-yet-added game is the same as adding it to the final destination.
-      const pendingAdd = pending.find(p => p.status === "pending" && p.type === "new_game" && p.data.title === title);
-      if (pendingAdd) {
-        pendingAdd.data.category = toCategory;
-        if (rank != null) pendingAdd.data.rank = rank;
-        pendingAdd.reason = reason;
-        pendingAdd.updatedAt = new Date().toISOString();
-        writeJSON("pending.json", pending);
-        return { content: [{ type: "text", text: `Suggestion updated: "${title}" will be added directly to ${toCategory}. Awaiting user approval.` }] };
-      }
-      const existing = pending.find(p => p.status === "pending" && p.type === "game_move" && p.data.title === title);
-      if (existing) {
-        existing.data = { title, fromCategory, toCategory, ...(rank != null ? { rank } : {}) };
-        existing.reason = reason;
-        existing.updatedAt = new Date().toISOString();
-      } else {
-        pending.push({ id: crypto.randomBytes(8).toString("hex"), type: "game_move", status: "pending", createdAt: new Date().toISOString(), reason, data: { title, fromCategory, toCategory, ...(rank != null ? { rank } : {}) } });
-      }
-      writeJSON("pending.json", pending);
-      return { content: [{ type: "text", text: `Suggestion queued: move "${title}" from ${fromCategory} to ${toCategory}. Awaiting user approval.` }] };
+      const result = queue("game_move", { title, fromCategory, toCategory, rank }, reason, readJSON, writeJSON);
+      const text = result.collapsed
+        ? `Suggestion updated: "${title}" will be added directly to ${toCategory}. Awaiting user approval.`
+        : `Suggestion queued: move "${title}" from ${fromCategory} to ${toCategory}. Awaiting user approval.`;
+      return { content: [{ type: "text", text }] };
     }
 
     case "suggest_profile_update": {
       const { section, change, reason } = args;
-      const pending = readJSON("pending.json", []);
-      const existing = pending.find(p => p.status === "pending" && p.type === "profile_update" && p.data.section === section);
-      if (existing) {
-        existing.data = { section, change };
-        existing.reason = reason;
-        existing.updatedAt = new Date().toISOString();
-      } else {
-        pending.push({ id: crypto.randomBytes(8).toString("hex"), type: "profile_update", status: "pending", createdAt: new Date().toISOString(), reason, data: { section, change } });
-      }
-      writeJSON("pending.json", pending);
+      queue("profile_update", { section, change }, reason, readJSON, writeJSON);
       return { content: [{ type: "text", text: `Profile update suggestion queued for section "${section}". Awaiting user approval.` }] };
     }
 
     case "suggest_game_edit": {
       const { title, mode, hours, note, reason } = args;
-      const pending = readJSON("pending.json", []);
-      const changes = {};
-      if (mode  !== undefined) changes.mode  = mode;
-      if (hours !== undefined) changes.hours = hours;
-      if (note  !== undefined) changes.note  = note;
-      if (!Object.keys(changes).length) {
+      if (mode === undefined && hours === undefined && note === undefined) {
         return { content: [{ type: "text", text: "No changes specified." }] };
       }
-      const existing = pending.find(p => p.status === "pending" && p.type === "game_edit" && p.data.title.toLowerCase() === title.toLowerCase());
-      if (existing) {
-        existing.data = { title, changes };
-        existing.reason = reason;
-        existing.updatedAt = new Date().toISOString();
-      } else {
-        pending.push({ id: crypto.randomBytes(8).toString("hex"), type: "game_edit", status: "pending", createdAt: new Date().toISOString(), reason, data: { title, changes } });
-      }
-      writeJSON("pending.json", pending);
-      return { content: [{ type: "text", text: `Edit suggestion queued for "${title}" (${Object.keys(changes).join(", ")}). Awaiting user approval.` }] };
+      const result = queue("game_edit", { title, mode, hours, note }, reason, readJSON, writeJSON);
+      return { content: [{ type: "text", text: `Edit suggestion queued for "${title}" (${Object.keys(result.item.data.changes).join(", ")}). Awaiting user approval.` }] };
     }
 
     case "suggest_new_game": {
-      const { title, category, mode = "", risk = "", hours = "", note = "", rank, reason } = args;
-      const pending = readJSON("pending.json", []);
-      const existing = pending.find(p => p.status === "pending" && p.type === "new_game" && p.data.title === title);
-      if (existing) {
-        existing.data = { title, category, mode, risk, hours, note, ...(rank != null ? { rank } : {}) };
-        existing.reason = reason;
-        existing.updatedAt = new Date().toISOString();
-      } else {
-        pending.push({ id: crypto.randomBytes(8).toString("hex"), type: "new_game", status: "pending", createdAt: new Date().toISOString(), reason, data: { title, category, mode, risk, hours, note, ...(rank != null ? { rank } : {}) } });
-      }
-      writeJSON("pending.json", pending);
+      const { title, category, reason } = args;
+      queue("new_game", args, reason, readJSON, writeJSON);
       return { content: [{ type: "text", text: `New game suggestion queued: "${title}" → ${category}. Awaiting user approval.` }] };
     }
 

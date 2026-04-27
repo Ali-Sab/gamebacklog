@@ -177,6 +177,128 @@ test("two suggestions for the same game show only one card", async ({ page }) =>
   }
 });
 
+test("approve-all button is hidden with one pending item, visible with multiple", async ({ page }) => {
+  // One item — button should be hidden
+  await injectPending(page, {
+    id: "aa-single",
+    type: "game_move",
+    status: "pending",
+    createdAt: new Date().toISOString(),
+    reason: "single",
+    data: { title: "Solo", fromCategory: "queue", toCategory: "played" }
+  });
+  await page.evaluate(() => typeof loadPending === "function" && loadPending());
+  await page.waitForTimeout(500);
+  await expect(page.locator("#approve-all-btn")).toBeHidden();
+
+  // Add a second item — button should appear
+  await injectPending(page, {
+    id: "aa-second",
+    type: "new_game",
+    status: "pending",
+    createdAt: new Date().toISOString(),
+    reason: "second",
+    data: { title: "Plus One", category: "decompression", mode: "puzzle", risk: "", hours: "3", note: "" }
+  });
+  await page.evaluate(() => typeof loadPending === "function" && loadPending());
+  await page.waitForTimeout(500);
+  await expect(page.locator("#approve-all-btn")).toBeVisible();
+});
+
+test("approve-all button approves every pending item in one click", async ({ page }) => {
+  // Seed library so move/edit have something to act on
+  const refreshRes = await page.request.post("/api/auth/refresh");
+  const { accessToken } = await refreshRes.json();
+  await page.request.post("/api/data", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    data: {
+      games: {
+        queue: [{ id: "ea1", title: "EA Move Me", mode: "rpg", risk: "", hours: "10", note: "" }],
+        caveats: [], decompression: [], yourCall: [], played: []
+      },
+      profile: "BASE\nbaseline."
+    }
+  });
+
+  await injectPending(page, {
+    id: "aa-1", type: "game_move", status: "pending", createdAt: new Date().toISOString(),
+    reason: "promote", data: { title: "EA Move Me", fromCategory: "queue", toCategory: "played" }
+  });
+  await injectPending(page, {
+    id: "aa-2", type: "new_game", status: "pending", createdAt: new Date().toISOString(),
+    reason: "fits", data: { title: "EA Brand New", category: "decompression", mode: "puzzle", risk: "", hours: "3", note: "" }
+  });
+  await injectPending(page, {
+    id: "aa-3", type: "profile_update", status: "pending", createdAt: new Date().toISOString(),
+    reason: "observed", data: { section: "EA SECTION", change: "Added by approve-all e2e." }
+  });
+
+  await page.evaluate(() => typeof loadPending === "function" && loadPending());
+  await page.waitForTimeout(500);
+
+  await page.click("#approve-all-btn");
+  await page.waitForTimeout(800);
+
+  // All cards gone
+  await expect(page.locator("#pending-list .pending-card")).toHaveCount(0);
+
+  // Verify mutations actually landed via the data API
+  const dataRes = await page.request.get("/api/data", {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  const { games, profile } = await dataRes.json();
+  expect(games.played.some(g => g.title === "EA Move Me")).toBe(true);
+  expect(games.queue.some(g => g.title === "EA Move Me")).toBe(false);
+  expect(games.decompression.some(g => g.title === "EA Brand New")).toBe(true);
+  expect(profile).toContain("EA SECTION");
+});
+
+test("reorder card renders and approving applies new ranks", async ({ page }) => {
+  const refreshRes = await page.request.post("/api/auth/refresh");
+  const { accessToken } = await refreshRes.json();
+  await page.request.post("/api/data", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    data: {
+      games: {
+        queue: [
+          { id: "ro1", title: "RO Alpha",   mode: "rpg",      risk: "", hours: "10", note: "", rank: 1 },
+          { id: "ro2", title: "RO Bravo",   mode: "tactical", risk: "", hours: "12", note: "", rank: 2 },
+          { id: "ro3", title: "RO Charlie", mode: "action",   risk: "", hours: "8",  note: "", rank: 3 }
+        ],
+        caveats: [], decompression: [], yourCall: [], played: []
+      },
+      profile: ""
+    }
+  });
+
+  await injectPending(page, {
+    id: "ro-1", type: "reorder", status: "pending", createdAt: new Date().toISOString(),
+    reason: "new ranking",
+    data: { category: "queue", rankedTitles: ["RO Charlie", "RO Bravo", "RO Alpha"] }
+  });
+
+  await page.evaluate(() => typeof loadPending === "function" && loadPending());
+  await page.waitForTimeout(500);
+
+  // Card renders with type label and category
+  await expect(page.locator("#pending-list")).toContainText("Reorder");
+  await expect(page.locator("#pending-list")).toContainText("Play Queue");
+
+  await page.locator(".pending-card button:has-text('Approve')").click();
+  await page.waitForTimeout(500);
+  await expect(page.locator("#pending-list .pending-card")).toHaveCount(0);
+
+  // Ranks applied as proposed
+  const dataRes = await page.request.get("/api/data", {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  const { games } = await dataRes.json();
+  const byTitle = Object.fromEntries(games.queue.map(g => [g.title, g.rank]));
+  expect(byTitle["RO Charlie"]).toBe(1);
+  expect(byTitle["RO Bravo"]).toBe(2);
+  expect(byTitle["RO Alpha"]).toBe(3);
+});
+
 test("MCP dedup: second suggestion for same game replaces first in pending.json", async ({ page }) => {
   const { execTool } = require("../../mcp-server");
 
