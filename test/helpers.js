@@ -8,18 +8,18 @@ function tmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "gamebacklog-test-"));
 }
 
-// Complete setup flow — returns the TOTP secret (needed for subsequent logins)
+// Complete setup flow — returns { secret, recoveryCodes }
 async function setupUser(request, app, computeTOTP, { username = "tester", password = "password123" } = {}) {
   const { body } = await request(app).get("/api/setup/secret").expect(200);
   const { secret } = body;
-  await request(app)
+  const res = await request(app)
     .post("/api/setup")
     .send({ username, password, totpCode: computeTOTP(secret) })
     .expect(200);
-  return secret;
+  return { secret, recoveryCodes: res.body.recoveryCodes || [] };
 }
 
-// Login with username + password + TOTP; returns { accessToken, cookie }
+// Login with username + password + TOTP; returns { accessToken, cookie, csrfToken }
 async function login(request, app, secret, computeTOTP, { username = "tester", password = "password123" } = {}) {
   const step1 = await request(app)
     .post("/api/auth/login")
@@ -29,12 +29,16 @@ async function login(request, app, secret, computeTOTP, { username = "tester", p
     .post("/api/auth/mfa")
     .send({ mfaToken: step1.body.mfaToken, code: computeTOTP(secret) })
     .expect(200);
-  return { accessToken: step2.body.accessToken, cookie: step2.headers["set-cookie"] };
+  return {
+    accessToken: step2.body.accessToken,
+    csrfToken:   step2.body.csrfToken,
+    cookie:      step2.headers["set-cookie"],
+  };
 }
 
 // Shorthand: setup + login in one call
 async function setupAndLogin(request, app, computeTOTP, opts = {}) {
-  const secret = await setupUser(request, app, computeTOTP, opts);
+  const { secret } = await setupUser(request, app, computeTOTP, opts);
   return login(request, app, secret, computeTOTP, opts);
 }
 
