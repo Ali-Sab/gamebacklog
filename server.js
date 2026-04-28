@@ -11,9 +11,12 @@ const jwt         = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
 const rateLimit   = require("express-rate-limit");
 const QRCode      = require("qrcode");
+const { generateSync: _otpGenerate, verifySync: _otpVerify, generateSecret: _otpSecret } = require("otplib");
+const { doubleCsrf }    = require("csrf-csrf");
 const { createMcpRouter } = require("./mcp-server");
-const { db, readJSON, writeJSON } = require("./db");
+const { db, readJSON, writeJSON, findGameById, insertGame, updateGame, deleteGameById } = require("./db");
 const { apply: applyPending } = require("./pendingTypes");
+
 
 const app  = express();
 app.set("trust proxy", 1); // trust first proxy (Nginx / Tailscale Funnel)
@@ -35,13 +38,27 @@ app.use((req, res, next) => {
   next();
 });
 
-// Rate limiting on auth endpoints
+// Rate limiting on auth endpoints (disabled in test to avoid hitting 20-req limit)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
   message: { error: "Too many attempts, try again in 15 minutes" },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === "test",
+});
+
+// CSRF (double-submit cookie). Cookie-auth routes verify X-CSRF-Token matches
+// the csrf cookie. Bearer-auth routes don't need it — the token isn't sent by the
+// browser automatically. Test runs skip the check to keep fixtures simple.
+const CSRF_SECRET = process.env.CSRF_SECRET || JWT_SECRET + ":csrf";
+const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
+  getSecret: () => CSRF_SECRET,
+  getSessionIdentifier: () => "default", // single-user app
+  cookieName: IS_PROD ? "__Host-csrf" : "csrf",
+  cookieOptions: { sameSite: "strict", secure: IS_PROD, httpOnly: false, path: "/" },
+  ignoredMethods: ["GET", "HEAD", "OPTIONS"],
+  skipCsrfProtection: () => process.env.NODE_ENV === "test",
 });
 
 // ─── Crypto helpers ──────────────────────────────────────────────────────────
@@ -52,46 +69,46 @@ function hashPassword(password, salt) {
   );
 }
 
-function base32Decode(s) {
-  const A = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  const clean = s.toUpperCase().replace(/[^A-Z2-7]/g, "");
-  let bits = 0, val = 0;
-  const out = [];
-  for (const ch of clean) {
-    const i = A.indexOf(ch);
-    if (i < 0) continue;
-    val = (val << 5) | i;
-    bits += 5;
-    if (bits >= 8) { out.push((val >>> (bits - 8)) & 0xff); bits -= 8; }
-  }
-  return Buffer.from(out);
-}
-
+// TOTP via otplib (RFC 6238). 30s step, ±1 window for clock drift.
 function computeTOTP(secret, offset = 0) {
-  const key = base32Decode(secret);
-  const counter = BigInt(Math.floor(Date.now() / 30000) + offset);
-  const buf = Buffer.alloc(8);
-  let t = counter;
-  for (let i = 7; i >= 0; i--) { buf[i] = Number(t & 0xffn); t >>= 8n; }
-  const hmac = crypto.createHmac("sha1", key).update(buf).digest();
-  const o = hmac[hmac.length - 1] & 0xf;
-  const n = ((hmac[o] & 0x7f) << 24) | ((hmac[o+1] & 0xff) << 16) |
-            ((hmac[o+2] & 0xff) << 8) | (hmac[o+3] & 0xff);
-  return String(n % 1_000_000).padStart(6, "0");
+  const epoch = Math.floor(Date.now() / 1000) + offset * 30;
+  return _otpGenerate({ secret, epoch });
 }
 
 function verifyTOTP(secret, code) {
-  const c = code.replace(/\s/g, "");
+  const c = (code || "").replace(/\s/g, "");
   if (c.length !== 6) return false;
-  for (const off of [-1, 0, 1]) {
-    if (computeTOTP(secret, off) === c) return true;
-  }
-  return false;
+  return _otpVerify({ secret, token: c, epochTolerance: 30 }).valid;
 }
 
 function generateSecret() {
-  const A = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  return Array.from(crypto.randomBytes(16), b => A[b % 32]).join("");
+  return _otpSecret(20); // 20 bytes → 32-char base32
+}
+
+// ── Recovery codes ───────────────────────────────────────────────────────────
+function newRecoveryCode() {
+  // 10 hex chars, formatted like "a3f4-b2c1-9e" for readability
+  const raw = crypto.randomBytes(5).toString("hex");
+  return `${raw.slice(0,4)}-${raw.slice(4,8)}-${raw.slice(8,10)}`;
+}
+
+async function generateRecoveryCodes(salt, n = 8) {
+  const plain = Array.from({ length: n }, newRecoveryCode);
+  const hashes = await Promise.all(plain.map(c => hashPassword(c, salt)));
+  return { plain, hashes };
+}
+
+// Returns true and removes the matching hash if a code matches; false otherwise.
+async function consumeRecoveryCode(creds, code) {
+  const c = (code || "").trim().toLowerCase();
+  if (!c) return false;
+  const candidate = await hashPassword(c, creds.salt);
+  const idx = (creds.recoveryCodes || []).findIndex(h => h === candidate);
+  if (idx === -1) return false;
+  const remaining = [...creds.recoveryCodes];
+  remaining.splice(idx, 1);
+  writeJSON("credentials.json", { ...creds, recoveryCodes: remaining });
+  return true;
 }
 
 // ─── JWT helpers ─────────────────────────────────────────────────────────────
@@ -156,7 +173,7 @@ app.get("/api/setup/secret", async (req, res) => {
   res.json({ secret, formatted: secret.match(/.{1,4}/g).join(" "), qrDataUrl });
 });
 
-// Complete setup
+// Complete setup. Returns recovery codes ONCE — the user must save them.
 app.post("/api/setup", authLimiter, async (req, res) => {
   try {
     const creds = readJSON("credentials.json", null);
@@ -173,9 +190,14 @@ app.post("/api/setup", authLimiter, async (req, res) => {
     }
     const salt = crypto.randomBytes(32).toString("hex");
     const hash = await hashPassword(password, salt);
-    writeJSON("credentials.json", { username: username.trim(), hash, salt, totpSecret: pending.secret });
+    const { plain, hashes } = await generateRecoveryCodes(salt);
+    writeJSON("credentials.json", {
+      username: username.trim(), hash, salt,
+      totpSecret: pending.secret,
+      recoveryCodes: hashes,
+    });
     writeJSON("pending_setup.json", null);
-    res.json({ ok: true });
+    res.json({ ok: true, recoveryCodes: plain });
   } catch (e) {
     console.error("Setup error:", e);
     res.status(500).json({ error: "Setup failed" });
@@ -204,6 +226,20 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
   }
 });
 
+function issueSession(res, username) {
+  const accessToken = signAccess(username);
+  const refreshToken = crypto.randomBytes(48).toString("hex");
+  saveRefreshToken(refreshToken);
+  res.cookie("refreshToken", refreshToken, {
+    httpOnly: true,
+    secure: IS_PROD,
+    sameSite: "strict",
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+    path: "/",
+  });
+  return accessToken;
+}
+
 // Step 2: verify TOTP, issue access + refresh tokens
 app.post("/api/auth/mfa", authLimiter, (req, res) => {
   try {
@@ -214,25 +250,58 @@ app.post("/api/auth/mfa", authLimiter, (req, res) => {
     if (!verifyTOTP(creds.totpSecret, code)) {
       return res.status(401).json({ error: "Invalid MFA code" });
     }
-    // Issue tokens
-    const accessToken = signAccess(payload.sub);
-    const refreshToken = crypto.randomBytes(48).toString("hex");
-    saveRefreshToken(refreshToken);
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: IS_PROD,
-      sameSite: "strict",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-      path: "/",
-    });
-    res.json({ accessToken });
+    const accessToken = issueSession(res, payload.sub);
+    const csrfToken = generateCsrfToken(req, res);
+    res.json({ accessToken, csrfToken });
   } catch (e) {
     res.status(401).json({ error: "MFA failed" });
   }
 });
 
+// Alternate step 2: redeem a one-time recovery code instead of TOTP.
+// Each code is consumed on use; user is told how many remain.
+app.post("/api/auth/recovery", authLimiter, async (req, res) => {
+  try {
+    const { mfaToken, code } = req.body;
+    const payload = jwt.verify(mfaToken, JWT_SECRET);
+    if (!payload.mfaPending) return res.status(401).json({ error: "Invalid token" });
+    const creds = readJSON("credentials.json", null);
+    if (!creds || !creds.recoveryCodes?.length) {
+      return res.status(401).json({ error: "No recovery codes available — set them up in Settings after logging in" });
+    }
+    const ok = await consumeRecoveryCode(creds, code);
+    if (!ok) return res.status(401).json({ error: "Invalid recovery code" });
+    const remaining = readJSON("credentials.json", null).recoveryCodes.length;
+    const accessToken = issueSession(res, payload.sub);
+    const csrfToken = generateCsrfToken(req, res);
+    res.json({ accessToken, csrfToken, remaining });
+  } catch (e) {
+    res.status(401).json({ error: "Recovery failed" });
+  }
+});
+
+// Regenerate recovery codes (from Settings, requires auth). Invalidates all old codes.
+app.post("/api/auth/recovery-codes/regenerate", requireAuth, async (req, res) => {
+  const creds = readJSON("credentials.json", null);
+  if (!creds) return res.status(400).json({ error: "Not configured" });
+  const { plain, hashes } = await generateRecoveryCodes(creds.salt);
+  writeJSON("credentials.json", { ...creds, recoveryCodes: hashes });
+  res.json({ recoveryCodes: plain });
+});
+
+// Number of recovery codes remaining (for the Settings UI to show a warning).
+app.get("/api/auth/recovery-codes/count", requireAuth, (req, res) => {
+  const creds = readJSON("credentials.json", null);
+  res.json({ remaining: creds?.recoveryCodes?.length ?? 0 });
+});
+
+// Get a fresh CSRF token (GET — no protection needed, sets the cookie)
+app.get("/api/auth/csrf", (req, res) => {
+  res.json({ csrfToken: generateCsrfToken(req, res) });
+});
+
 // Refresh access token using httpOnly cookie
-app.post("/api/auth/refresh", (req, res) => {
+app.post("/api/auth/refresh", doubleCsrfProtection, (req, res) => {
   const rt = req.cookies?.refreshToken;
   if (!rt || !validateRefreshToken(rt)) {
     return res.status(401).json({ error: "Invalid or expired refresh token" });
@@ -244,7 +313,7 @@ app.post("/api/auth/refresh", (req, res) => {
 });
 
 // Logout — revoke refresh token
-app.post("/api/auth/logout", (req, res) => {
+app.post("/api/auth/logout", doubleCsrfProtection, (req, res) => {
   const rt = req.cookies?.refreshToken;
   if (rt) revokeRefreshToken(rt);
   res.clearCookie("refreshToken", { path: "/" });
@@ -261,11 +330,13 @@ app.post("/api/auth/change-password", requireAuth, async (req, res) => {
     if (hash !== creds.hash) return res.status(401).json({ error: "Current password incorrect" });
     const salt = crypto.randomBytes(32).toString("hex");
     const newHash = await hashPassword(newPassword, salt);
-    writeJSON("credentials.json", { ...creds, hash: newHash, salt });
+    // Recovery codes are salted with the credential salt — must be regenerated.
+    const { plain, hashes } = await generateRecoveryCodes(salt);
+    writeJSON("credentials.json", { ...creds, hash: newHash, salt, recoveryCodes: hashes });
     // revoke all refresh tokens
     writeJSON("refresh_tokens.json", {});
     res.clearCookie("refreshToken", { path: "/" });
-    res.json({ ok: true });
+    res.json({ ok: true, recoveryCodes: plain });
   } catch (e) {
     res.status(500).json({ error: "Password change failed" });
   }
@@ -276,6 +347,104 @@ app.get("/api/data", requireAuth, (req, res) => {
   const games   = readJSON("games.json", null);
   const profile = readJSON("profile.json", null);
   res.json({ games, profile });
+});
+
+// ─── Per-row games API ────────────────────────────────────────────────────────
+// Validation helpers shared by POST/PATCH.
+const PLATFORMS = ["pc", "ps5"];
+const INPUTS    = ["kbm", "ps5-controller", "xbox-controller"];
+
+function validateGameFields(fields, { partial = false } = {}) {
+  if (!partial) {
+    if (!fields.title || typeof fields.title !== "string" || !fields.title.trim()) {
+      return "title is required";
+    }
+  } else if (fields.title !== undefined && (typeof fields.title !== "string" || !fields.title.trim())) {
+    return "title must be a non-empty string";
+  }
+  if (fields.platform != null && !PLATFORMS.includes(fields.platform)) {
+    return `platform must be one of: ${PLATFORMS.join(", ")}`;
+  }
+  if (fields.input != null && !INPUTS.includes(fields.input)) {
+    return `input must be one of: ${INPUTS.join(", ")}`;
+  }
+  if (fields.url != null && typeof fields.url !== "string") return "url must be a string";
+  if (fields.imageUrl != null && typeof fields.imageUrl !== "string") return "imageUrl must be a string";
+  return null;
+}
+
+function nextRankIn(category) {
+  const rows = db.prepare("SELECT MAX(rank) as m FROM games WHERE category = ?").get(category);
+  return (rows?.m ?? 0) + 1;
+}
+
+// Add a new game (manual user adds). New games always go to the inbox category.
+app.post("/api/games", requireAuth, (req, res) => {
+  const fields = req.body || {};
+  const err = validateGameFields(fields);
+  if (err) return res.status(400).json({ error: err });
+  const id = "usr-" + crypto.randomBytes(4).toString("hex");
+  const game = {
+    id,
+    title: fields.title.trim(),
+    mode:     fields.mode     || null,
+    risk:     fields.risk     || null,
+    hours:    fields.hours    || null,
+    note:     fields.note     || null,
+    url:      fields.url      || null,
+    platform: fields.platform || null,
+    input:    fields.input    || null,
+    imageUrl: fields.imageUrl || null,
+  };
+  insertGame(game, "inbox");
+  res.json({ ok: true, game: { ...game, category: "inbox" } });
+});
+
+// Patch fields on an existing game. Only the supplied keys are touched.
+app.patch("/api/games/:id", requireAuth, (req, res) => {
+  const existing = findGameById(req.params.id);
+  if (!existing) return res.status(404).json({ error: "Not found" });
+  const patch = req.body || {};
+  const err = validateGameFields(patch, { partial: true });
+  if (err) return res.status(400).json({ error: err });
+  // Forbid changing category/rank through this endpoint — those go through dedicated paths
+  delete patch.category;
+  delete patch.rank;
+  if (patch.title) patch.title = patch.title.trim();
+  updateGame(req.params.id, patch);
+  res.json({ ok: true, game: findGameById(req.params.id) });
+});
+
+// Move a game to a different category. Always lands at the end (rank = max+1).
+app.post("/api/games/:id/move", requireAuth, (req, res) => {
+  const existing = findGameById(req.params.id);
+  if (!existing) return res.status(404).json({ error: "Not found" });
+  const { category } = req.body || {};
+  if (typeof category !== "string") return res.status(400).json({ error: "category is required" });
+  db.transaction(() => {
+    updateGame(req.params.id, { category, rank: nextRankIn(category) });
+  })();
+  res.json({ ok: true, game: findGameById(req.params.id) });
+});
+
+// Mark a game as played — moves to the played category and stamps the played date.
+app.post("/api/games/:id/played", requireAuth, (req, res) => {
+  const existing = findGameById(req.params.id);
+  if (!existing) return res.status(404).json({ error: "Not found" });
+  db.transaction(() => {
+    updateGame(req.params.id, {
+      category:   "played",
+      rank:       nextRankIn("played"),
+      playedDate: new Date().toLocaleDateString(),
+    });
+  })();
+  res.json({ ok: true, game: findGameById(req.params.id) });
+});
+
+app.delete("/api/games/:id", requireAuth, (req, res) => {
+  const ok = deleteGameById(req.params.id);
+  if (!ok) return res.status(404).json({ error: "Not found" });
+  res.json({ ok: true });
 });
 
 // Export — downloads a JSON snapshot of games + profile

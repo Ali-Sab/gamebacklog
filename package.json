@@ -15,17 +15,22 @@
     "testMatch": [
       "**/test/**/*.test.js"
     ],
-    "testTimeout": 15000
+    "testTimeout": 15000,
+    "moduleNameMapper": {
+      "^otplib$": "<rootDir>/__mocks__/otplib.js"
+    }
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "better-sqlite3": "^12.9.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
+    "csrf-csrf": "^4.0.3",
     "dotenv": "^17.4.2",
     "express": "^4.19.2",
     "express-rate-limit": "^7.4.1",
     "jsonwebtoken": "^9.0.2",
+    "otplib": "^13.4.0",
     "qrcode": "^1.5.4"
   },
   "engines": {

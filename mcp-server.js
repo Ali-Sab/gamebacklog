@@ -59,11 +59,12 @@ async function execTool(name, args = {}, readJSON, writeJSON) {
     }
 
     case "suggest_game_edit": {
-      const { title, mode, hours, note, url, reason } = args;
-      if (mode === undefined && hours === undefined && note === undefined && url === undefined) {
+      const { title, mode, hours, note, url, platform, input, imageUrl, reason } = args;
+      const editable = { mode, hours, note, url, platform, input, imageUrl };
+      if (Object.values(editable).every(v => v === undefined)) {
         return { content: [{ type: "text", text: "No changes specified." }] };
       }
-      const result = queue("game_edit", { title, mode, hours, note, url }, reason, readJSON, writeJSON);
+      const result = queue("game_edit", { title, ...editable }, reason, readJSON, writeJSON);
       return { content: [{ type: "text", text: `Edit suggestion queued for "${title}" (${Object.keys(result.item.data.changes).join(", ")}). Awaiting user approval.` }] };
     }
 
@@ -143,11 +144,14 @@ function createMcpRouter({ readJSON, writeJSON }) {
             type: "object",
             properties: {
               title:  { type: "string", description: "Exact game title as it appears in the library" },
-              mode:   { type: "string", description: "Corrected mode/genre: atmospheric, narrative, detective, tactical, immersive, action, strategy, puzzle, rpg" },
-              hours:  { type: "string", description: "Corrected hours estimate e.g. '10' or '8-12'" },
-              note:   { type: "string", description: "Replacement note for the game" },
-              url:    { type: "string", description: "Store URL — Steam preferred when available, otherwise PlayStation Store" },
-              reason: { type: "string", description: "Why this edit improves the entry" }
+              mode:     { type: "string", description: "Corrected mode/genre: atmospheric, narrative, detective, tactical, immersive, action, strategy, puzzle, rpg" },
+              hours:    { type: "string", description: "Corrected hours estimate e.g. '10' or '8-12'" },
+              note:     { type: "string", description: "Replacement note for the game" },
+              url:      { type: "string", description: "Store URL — Steam preferred when available, otherwise PlayStation Store" },
+              platform: { type: "string", description: "Recommended platform: 'pc' or 'ps5'" },
+              input:    { type: "string", description: "Recommended input: 'kbm' (keyboard+mouse), 'ps5-controller', or 'xbox-controller'" },
+              imageUrl: { type: "string", description: "Cover art URL (optional)" },
+              reason:   { type: "string", description: "Why this edit improves the entry" }
             },
             required: ["title", "reason"]
           }
@@ -165,6 +169,9 @@ function createMcpRouter({ readJSON, writeJSON }) {
               hours:    { type: "string", description: "Estimated hours e.g. '10' or '8-12'" },
               note:     { type: "string", description: "Notes about the game and fit" },
               url:      { type: "string", description: "Store URL — Steam preferred when available, otherwise PlayStation Store" },
+              platform: { type: "string", description: "Recommended platform: 'pc' or 'ps5'" },
+              input:    { type: "string", description: "Recommended input: 'kbm', 'ps5-controller', or 'xbox-controller'" },
+              imageUrl: { type: "string", description: "Cover art URL (optional)" },
               rank:     { type: "integer", description: "Desired rank position within the category (1 = highest priority). If omitted, appends to the end." },
               reason:   { type: "string", description: "Why this game fits the user's profile" }
             },

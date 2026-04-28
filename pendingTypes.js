@@ -71,15 +71,16 @@ const HANDLERS = {
   new_game: {
     dedup: (args, pending) =>
       pending.find(p => p.status === "pending" && p.type === "new_game" && p.data.title === args.title),
-    buildData: ({ title, category, mode = "", risk = "", hours = "", note = "", url = "", rank }) => ({
-      title, category, mode, risk, hours, note, url, ...(rank != null ? { rank } : {})
+    buildData: ({ title, category, mode = "", risk = "", hours = "", note = "", url = "", platform = "", input = "", imageUrl = "", rank }) => ({
+      title, category, mode, risk, hours, note, url, platform, input, imageUrl,
+      ...(rank != null ? { rank } : {})
     }),
     apply({ data }, { games }) {
-      const { title, category, mode, risk, hours, note, url, rank } = data;
+      const { title, category, mode, risk, hours, note, url, platform, input, imageUrl, rank } = data;
       const id = "mcp-" + crypto.randomBytes(4).toString("hex");
       const list = games[category] || [];
       const newRank = assignRank(list, rank);
-      games[category] = [...list, { id, title, mode, risk, hours, note, url, rank: newRank }];
+      games[category] = [...list, { id, title, mode, risk, hours, note, url, platform, input, imageUrl, rank: newRank }];
     }
   },
 
@@ -87,12 +88,15 @@ const HANDLERS = {
     dedup: (args, pending) =>
       pending.find(p => p.status === "pending" && p.type === "game_edit"
         && p.data.title.toLowerCase() === args.title.toLowerCase()),
-    buildData({ title, mode, hours, note, url }) {
+    buildData({ title, mode, hours, note, url, platform, input, imageUrl }) {
       const changes = {};
-      if (mode  !== undefined) changes.mode  = mode;
-      if (hours !== undefined) changes.hours = hours;
-      if (note  !== undefined) changes.note  = note;
-      if (url   !== undefined) changes.url   = url;
+      if (mode     !== undefined) changes.mode     = mode;
+      if (hours    !== undefined) changes.hours    = hours;
+      if (note     !== undefined) changes.note     = note;
+      if (url      !== undefined) changes.url      = url;
+      if (platform !== undefined) changes.platform = platform;
+      if (input    !== undefined) changes.input    = input;
+      if (imageUrl !== undefined) changes.imageUrl = imageUrl;
       return { title, changes };
     },
     apply({ data }, { games }) {

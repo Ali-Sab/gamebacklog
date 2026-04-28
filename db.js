@@ -13,6 +13,10 @@ db.pragma("foreign_keys = ON");
 // Migrate existing databases that predate later-added columns
 try { db.exec("ALTER TABLE games ADD COLUMN played_date TEXT"); } catch {}
 try { db.exec("ALTER TABLE games ADD COLUMN url TEXT"); } catch {}
+try { db.exec("ALTER TABLE games ADD COLUMN platform TEXT"); } catch {}
+try { db.exec("ALTER TABLE games ADD COLUMN input TEXT"); } catch {}
+try { db.exec("ALTER TABLE games ADD COLUMN image_url TEXT"); } catch {}
+try { db.exec("ALTER TABLE credentials ADD COLUMN recovery_codes TEXT"); } catch {}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS games (
@@ -25,7 +29,10 @@ db.exec(`
     hours       TEXT,
     note        TEXT,
     played_date TEXT,
-    url         TEXT
+    url         TEXT,
+    platform    TEXT,
+    input       TEXT,
+    image_url   TEXT
   );
 
   CREATE TABLE IF NOT EXISTS profile (
@@ -46,11 +53,12 @@ db.exec(`
   );
 
   CREATE TABLE IF NOT EXISTS credentials (
-    id           INTEGER PRIMARY KEY CHECK (id = 1),
-    username     TEXT NOT NULL,
-    hash         TEXT NOT NULL,
-    salt         TEXT NOT NULL,
-    totp_secret  TEXT NOT NULL
+    id              INTEGER PRIMARY KEY CHECK (id = 1),
+    username        TEXT NOT NULL,
+    hash            TEXT NOT NULL,
+    salt            TEXT NOT NULL,
+    totp_secret     TEXT NOT NULL,
+    recovery_codes  TEXT
   );
 
   CREATE TABLE IF NOT EXISTS refresh_tokens (
@@ -69,32 +77,53 @@ db.exec(`
 
 const ALL_CATS = ['inbox', 'queue', 'caveats', 'decompression', 'yourCall', 'played'];
 
+function rowToGame(row) {
+  const g = { id: row.id, title: row.title };
+  if (row.rank        != null) g.rank       = row.rank;
+  if (row.mode        != null) g.mode       = row.mode;
+  if (row.risk        != null) g.risk       = row.risk;
+  if (row.hours       != null) g.hours      = row.hours;
+  if (row.note        != null) g.note       = row.note;
+  if (row.played_date != null) g.playedDate = row.played_date;
+  if (row.url         != null) g.url        = row.url;
+  if (row.platform    != null) g.platform   = row.platform;
+  if (row.input       != null) g.input      = row.input;
+  if (row.image_url   != null) g.imageUrl   = row.image_url;
+  return g;
+}
+
+function gameToRow(g, category) {
+  return {
+    id: g.id, title: g.title, category,
+    rank: g.rank ?? null, mode: g.mode ?? null,
+    risk: g.risk ?? null, hours: g.hours ?? null, note: g.note ?? null,
+    played_date: g.playedDate ?? null,
+    url: g.url ?? null,
+    platform: g.platform ?? null,
+    input: g.input ?? null,
+    image_url: g.imageUrl ?? null,
+  };
+}
+
 function readGames() {
   const rows = db.prepare("SELECT * FROM games").all();
   if (rows.length === 0) return null;
   const result = Object.fromEntries(ALL_CATS.map(c => [c, []]));
   for (const row of rows) {
     if (!result[row.category]) result[row.category] = [];
-    const g = { id: row.id, title: row.title };
-    if (row.rank        != null) g.rank       = row.rank;
-    if (row.mode        != null) g.mode       = row.mode;
-    if (row.risk        != null) g.risk       = row.risk;
-    if (row.hours       != null) g.hours      = row.hours;
-    if (row.note        != null) g.note       = row.note;
-    if (row.played_date != null) g.playedDate = row.played_date;
-    if (row.url         != null) g.url        = row.url;
-    result[row.category].push(g);
+    result[row.category].push(rowToGame(row));
   }
   return result;
 }
 
 const upsertGame = db.prepare(`
-  INSERT INTO games (id, title, category, rank, mode, risk, hours, note, played_date, url)
-  VALUES (@id, @title, @category, @rank, @mode, @risk, @hours, @note, @played_date, @url)
+  INSERT INTO games (id, title, category, rank, mode, risk, hours, note, played_date, url, platform, input, image_url)
+  VALUES (@id, @title, @category, @rank, @mode, @risk, @hours, @note, @played_date, @url, @platform, @input, @image_url)
   ON CONFLICT(id) DO UPDATE SET
     title=excluded.title, category=excluded.category, rank=excluded.rank,
     mode=excluded.mode, risk=excluded.risk, hours=excluded.hours, note=excluded.note,
-    played_date=excluded.played_date, url=excluded.url
+    played_date=excluded.played_date, url=excluded.url,
+    platform=excluded.platform, input=excluded.input, image_url=excluded.image_url
 `);
 
 const deleteGame = db.prepare("DELETE FROM games WHERE id = ?");
@@ -104,18 +133,35 @@ function writeGames(gamesObj) {
   const replaceAll = db.transaction((obj) => {
     deleteAllGames.run();
     for (const [category, list] of Object.entries(obj)) {
-      for (const g of (list || [])) {
-        upsertGame.run({
-          id: g.id, title: g.title, category,
-          rank: g.rank ?? null, mode: g.mode ?? null,
-          risk: g.risk ?? null, hours: g.hours ?? null, note: g.note ?? null,
-          played_date: g.playedDate ?? null,
-          url: g.url ?? null,
-        });
-      }
+      for (const g of (list || [])) upsertGame.run(gameToRow(g, category));
     }
   });
   replaceAll(gamesObj);
+}
+
+// ── Typed per-row API for games — preferred over the readJSON/writeJSON shim
+// for endpoints that mutate a single game. Avoids full table rewrites.
+
+function findGameById(id) {
+  const row = db.prepare("SELECT * FROM games WHERE id = ?").get(id);
+  return row ? { ...rowToGame(row), category: row.category } : null;
+}
+
+function insertGame(game, category) {
+  upsertGame.run(gameToRow(game, category));
+}
+
+function updateGame(id, patch) {
+  const row = db.prepare("SELECT * FROM games WHERE id = ?").get(id);
+  if (!row) return false;
+  // Patch keys are camelCase (mirroring the API). Map back to columns.
+  const next = { ...rowToGame(row), category: row.category, ...patch };
+  upsertGame.run(gameToRow(next, patch.category ?? row.category));
+  return true;
+}
+
+function deleteGameById(id) {
+  return deleteGame.run(id).changes > 0;
 }
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
@@ -181,19 +227,29 @@ function writePending(items) {
 function readCredentials() {
   const row = db.prepare("SELECT * FROM credentials WHERE id = 1").get();
   if (!row) return null;
-  return { username: row.username, hash: row.hash, salt: row.salt, totpSecret: row.totp_secret };
+  return {
+    username:      row.username,
+    hash:          row.hash,
+    salt:          row.salt,
+    totpSecret:    row.totp_secret,
+    recoveryCodes: row.recovery_codes ? JSON.parse(row.recovery_codes) : [],
+  };
 }
 
 function writeCredentials(creds) {
   db.prepare(`
-    INSERT INTO credentials (id, username, hash, salt, totp_secret)
-    VALUES (1, @username, @hash, @salt, @totp_secret)
+    INSERT INTO credentials (id, username, hash, salt, totp_secret, recovery_codes)
+    VALUES (1, @username, @hash, @salt, @totp_secret, @recovery_codes)
     ON CONFLICT(id) DO UPDATE SET
       username=excluded.username, hash=excluded.hash,
-      salt=excluded.salt, totp_secret=excluded.totp_secret
+      salt=excluded.salt, totp_secret=excluded.totp_secret,
+      recovery_codes=excluded.recovery_codes
   `).run({
-    username: creds.username, hash: creds.hash,
-    salt: creds.salt, totp_secret: creds.totpSecret,
+    username:       creds.username,
+    hash:           creds.hash,
+    salt:           creds.salt,
+    totp_secret:    creds.totpSecret,
+    recovery_codes: creds.recoveryCodes ? JSON.stringify(creds.recoveryCodes) : null,
   });
 }
 
@@ -263,4 +319,8 @@ function writeJSON(file, data) {
   }
 }
 
-module.exports = { db, readJSON, writeJSON };
+module.exports = {
+  db, readJSON, writeJSON,
+  // Typed per-row API
+  findGameById, insertGame, updateGame, deleteGameById,
+};

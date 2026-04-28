@@ -26,7 +26,7 @@ describe("GET /api/setup/status", () => {
 describe("GET /api/setup/secret", () => {
   test("returns secret, formatted string, and QR data URL", async () => {
     const res = await request(app).get("/api/setup/secret").expect(200);
-    expect(res.body.secret).toMatch(/^[A-Z2-7]{16}$/);
+    expect(res.body.secret).toMatch(/^[A-Z2-7]{32}$/);
     expect(res.body.formatted).toMatch(/^[A-Z2-7 ]+$/);
     expect(res.body.qrDataUrl).toMatch(/^data:image\/png;base64,/);
   });
@@ -59,11 +59,17 @@ describe("POST /api/setup", () => {
   });
 
   test("accepts valid credentials and TOTP code", async () => {
-    // This is the "real" setup that the rest of auth tests depend on.
-    // Store secret at module scope so later describe blocks can use it.
-    const secret = await setupUser(request, app, computeTOTP);
-    totpSecret = secret;
-    expect(secret).toMatch(/^[A-Z2-7]{16}$/);
+    const result = await setupUser(request, app, computeTOTP);
+    totpSecret = result.secret;
+    setupRecoveryCodes = result.recoveryCodes;
+    expect(result.secret).toMatch(/^[A-Z2-7]{32}$/);
+  });
+
+  test("returns recovery codes in setup response", async () => {
+    // codes were captured in the previous test
+    expect(Array.isArray(setupRecoveryCodes)).toBe(true);
+    expect(setupRecoveryCodes).toHaveLength(8);
+    expect(setupRecoveryCodes[0]).toMatch(/^[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{2}$/);
   });
 });
 
@@ -81,18 +87,8 @@ describe("GET /api/setup/secret (after setup)", () => {
 });
 
 // ─── Login flow ───────────────────────────────────────────────────────────────
-// All login tests share the user created in the setup block above.
-// We need the secret to compute TOTP — so we grab it fresh each describe via beforeAll.
 let totpSecret;
-beforeAll(async () => {
-  // Setup was already done in the describe blocks above.
-  // The secret was stored in pending_setup.json during GET /api/setup/secret,
-  // then moved to credentials.json by POST /api/setup.
-  // We compute TOTP from the first secret generated during setup.
-  // Simplest: just store it from the setupUser call. We can't re-read it here,
-  // so we'll rely on computeTOTP with a known-good secret from a login test.
-  // Instead, we do a fresh login each test that needs it.
-});
+let setupRecoveryCodes = [];
 
 describe("POST /api/auth/login (step 1)", () => {
   test("rejects wrong password", async () => {
@@ -147,6 +143,107 @@ describe("POST /api/auth/mfa (step 2)", () => {
       .send({ mfaToken: "not-a-jwt", code: "123456" })
       .expect(401);
     expect(res.body.error).toBeDefined();
+  });
+});
+
+// ─── GET /api/auth/csrf ───────────────────────────────────────────────────────
+describe("GET /api/auth/csrf", () => {
+  test("returns a csrfToken string", async () => {
+    const res = await request(app).get("/api/auth/csrf").expect(200);
+    expect(typeof res.body.csrfToken).toBe("string");
+    expect(res.body.csrfToken.length).toBeGreaterThan(0);
+  });
+});
+
+// ─── POST /api/auth/mfa returns csrfToken ─────────────────────────────────────
+describe("POST /api/auth/mfa returns csrfToken", () => {
+  test("response includes csrfToken alongside accessToken", async () => {
+    const step1 = await request(app)
+      .post("/api/auth/login")
+      .send({ username: "tester", password: "password123" })
+      .expect(200);
+    const step2 = await request(app)
+      .post("/api/auth/mfa")
+      .send({ mfaToken: step1.body.mfaToken, code: computeTOTP(totpSecret) })
+      .expect(200);
+    expect(step2.body.accessToken).toBeDefined();
+    expect(typeof step2.body.csrfToken).toBe("string");
+  });
+});
+
+// ─── Recovery code login ──────────────────────────────────────────────────────
+describe("POST /api/auth/recovery", () => {
+  let mfaToken;
+  beforeEach(async () => {
+    const res = await request(app)
+      .post("/api/auth/login")
+      .send({ username: "tester", password: "password123" })
+      .expect(200);
+    mfaToken = res.body.mfaToken;
+  });
+
+  test("rejects invalid recovery code", async () => {
+    const res = await request(app)
+      .post("/api/auth/recovery")
+      .send({ mfaToken, code: "0000-0000-00" })
+      .expect(401);
+    expect(res.body.error).toBeDefined();
+  });
+
+  test("accepts a valid recovery code and returns accessToken + remaining count", async () => {
+    const code = setupRecoveryCodes[0];
+    const res = await request(app)
+      .post("/api/auth/recovery")
+      .send({ mfaToken, code })
+      .expect(200);
+    expect(res.body.accessToken).toBeDefined();
+    expect(typeof res.body.csrfToken).toBe("string");
+    expect(res.body.remaining).toBe(7); // 8 - 1
+  });
+
+  test("used recovery code cannot be reused", async () => {
+    const code = setupRecoveryCodes[0]; // already consumed above
+    const res = await request(app)
+      .post("/api/auth/recovery")
+      .send({ mfaToken, code })
+      .expect(401);
+    expect(res.body.error).toBeDefined();
+  });
+});
+
+// ─── Recovery code management ─────────────────────────────────────────────────
+describe("recovery code endpoints", () => {
+  let token;
+  beforeAll(async () => {
+    const result = await login(request, app, totpSecret, computeTOTP);
+    token = result.accessToken;
+  });
+
+  test("GET /api/auth/recovery-codes/count requires auth", async () => {
+    await request(app).get("/api/auth/recovery-codes/count").expect(401);
+  });
+
+  test("GET /api/auth/recovery-codes/count returns remaining count", async () => {
+    const res = await request(app)
+      .get("/api/auth/recovery-codes/count")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(200);
+    expect(typeof res.body.remaining).toBe("number");
+    expect(res.body.remaining).toBeGreaterThanOrEqual(0);
+  });
+
+  test("POST /api/auth/recovery-codes/regenerate requires auth", async () => {
+    await request(app).post("/api/auth/recovery-codes/regenerate").expect(401);
+  });
+
+  test("POST /api/auth/recovery-codes/regenerate returns 8 new codes", async () => {
+    const res = await request(app)
+      .post("/api/auth/recovery-codes/regenerate")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(200);
+    expect(Array.isArray(res.body.recoveryCodes)).toBe(true);
+    expect(res.body.recoveryCodes).toHaveLength(8);
+    expect(res.body.recoveryCodes[0]).toMatch(/^[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{2}$/);
   });
 });
 
@@ -235,5 +332,7 @@ describe("POST /api/auth/change-password", () => {
       .send({ currentPassword: "password123", newPassword: "newpassword456" })
       .expect(200);
     expect(res.body.ok).toBe(true);
+    expect(Array.isArray(res.body.recoveryCodes)).toBe(true);
+    expect(res.body.recoveryCodes).toHaveLength(8);
   });
 });

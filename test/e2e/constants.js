@@ -10,6 +10,6 @@ module.exports = {
   AUTH_STATE_FILE: path.join(__dirname, ".auth-state.json"),
   USERNAME:        "e2etester",
   PASSWORD:        "e2epassword123",
-  // Fixed 16-char base32 TOTP secret — used for deterministic test codes
-  TOTP_SECRET:     "AAAAAAAAAAAAAAAA",
+  // Fixed 32-char base32 TOTP secret (20 bytes) — used for deterministic test codes
+  TOTP_SECRET:     "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
 };

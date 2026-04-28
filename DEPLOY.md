@@ -124,6 +124,8 @@ server {
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
 
         # Required for MCP SSE streaming
@@ -142,6 +144,8 @@ sudo certbot --nginx -d yourdomain.com
 ```
 
 Your app is now at `https://yourdomain.com`.
+
+> **Trust proxy**: `server.js` already calls `app.set('trust proxy', 1)`. This tells Express to trust the `X-Forwarded-*` headers set by Nginx so that rate limiting and `secure` cookie flags work correctly behind the reverse proxy. No additional configuration needed.
 
 **Domain options:**
 - TP-Link DDNS + port forwarding gives you a free subdomain pointing to your home IP
