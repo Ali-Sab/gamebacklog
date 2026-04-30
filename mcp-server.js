@@ -33,8 +33,12 @@ async function execTool(name, args = {}, readJSON, writeJSON) {
     }
 
     case "get_taste_profile": {
-      const profile = readJSON("profile.json", "");
-      return { content: [{ type: "text", text: profile || "(no profile set)" }] };
+      const profile = readJSON("profile.json", []);
+      if (!Array.isArray(profile) || profile.length === 0) {
+        return { content: [{ type: "text", text: "(no profile set)" }] };
+      }
+      const text = profile.map(s => `${s.name}\n${s.text}`).join("\n\n");
+      return { content: [{ type: "text", text }] };
     }
 
     case "suggest_reorder": {

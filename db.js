@@ -120,16 +120,44 @@ function writeGames(gamesObj) {
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
+function migrateLegacyProfile(text) {
+  const sections = [];
+  const lines = (text || "").split("\n");
+  let current = null;
+  for (const line of lines) {
+    if (/^[A-Z][A-Z\s\/\(\)&+,:'-]+$/.test(line.trim()) && line.trim().length > 0) {
+      if (current) sections.push(current);
+      current = { name: line.trim(), text: "" };
+    } else if (current) {
+      current.text += (current.text ? "\n" : "") + line;
+    }
+  }
+  if (current) sections.push(current);
+  sections.forEach(s => { s.text = s.text.trim(); });
+  return sections.filter(s => s.name);
+}
+
 function readProfile() {
   const row = db.prepare("SELECT content FROM profile WHERE id = 1").get();
-  return row ? row.content : null;
+  if (!row) return null;
+  try {
+    const parsed = JSON.parse(row.content);
+    if (Array.isArray(parsed)) return parsed;
+    // Stored as a JSON string (legacy string wrapped in JSON)
+    if (typeof parsed === "string") return migrateLegacyProfile(parsed);
+  } catch {
+    // Raw text stored without JSON encoding
+    return migrateLegacyProfile(row.content);
+  }
+  return null;
 }
 
 function writeProfile(content) {
+  const value = Array.isArray(content) ? JSON.stringify(content) : JSON.stringify(content ?? []);
   db.prepare(`
     INSERT INTO profile (id, content) VALUES (1, ?)
     ON CONFLICT(id) DO UPDATE SET content=excluded.content
-  `).run(typeof content === "string" ? content : JSON.stringify(content));
+  `).run(value);
 }
 
 // ─── Pending ──────────────────────────────────────────────────────────────────

@@ -26,7 +26,7 @@ const GAMES = {
   played: []
 };
 
-const PROFILE = "CORE IDENTITY\nI love atmospheric games above all else.";
+const PROFILE = [{ name: "CORE IDENTITY", text: "I love atmospheric games above all else." }];
 
 // ─── get_game_library ─────────────────────────────────────────────────────────
 describe("get_game_library", () => {
@@ -82,7 +82,7 @@ describe("get_taste_profile", () => {
   test("returns the full profile text", async () => {
     const { readJSON, writeJSON } = makeStore({ "profile.json": PROFILE });
     const result = await execTool("get_taste_profile", {}, readJSON, writeJSON);
-    expect(text(result)).toBe(PROFILE);
+    expect(text(result)).toBe("CORE IDENTITY\nI love atmospheric games above all else.");
   });
 
   test("returns placeholder when no profile is set", async () => {

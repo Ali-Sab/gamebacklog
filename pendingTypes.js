@@ -29,14 +29,14 @@ function assignRank(list, targetRank) {
 }
 
 function applySectionUpdate(profile, section, change) {
-  const header = section.toUpperCase();
-  const parts = (profile || "").split(/(?=^[A-Z][A-Z\s\/\(\)&+,:'-]+$)/m);
-  const idx = parts.findIndex(p => p.trimStart().startsWith(header));
+  const sections = Array.isArray(profile) ? [...profile] : [];
+  const idx = sections.findIndex(s => s.name.toLowerCase() === section.toLowerCase());
   if (idx !== -1) {
-    parts[idx] = `${header}\n${change}`;
-    return parts.join("").trim();
+    sections[idx] = { ...sections[idx], text: change };
+  } else {
+    sections.push({ name: section, text: change });
   }
-  return ((profile || "").trim() + `\n\n${header}\n${change}`).trim();
+  return sections;
 }
 
 const HANDLERS = {
@@ -64,7 +64,7 @@ const HANDLERS = {
       pending.find(p => p.status === "pending" && p.type === "profile_update" && p.data.section === args.section),
     buildData: ({ section, change }) => ({ section, change }),
     apply({ data }, ctx) {
-      ctx.profile = applySectionUpdate(ctx.profile || "", data.section, data.change);
+      ctx.profile = applySectionUpdate(ctx.profile || [], data.section, data.change);
     }
   },
 

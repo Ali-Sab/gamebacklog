@@ -33,7 +33,7 @@ beforeAll(async () => {
   await request(app)
     .post("/api/data")
     .set("Authorization", `Bearer ${token}`)
-    .send({ games, profile: "My taste profile." });
+    .send({ games, profile: [{ name: "CORE IDENTITY", text: "My taste profile." }] });
 });
 
 afterAll(() => fs.rmSync(DATA_DIR, { recursive: true, force: true }));
@@ -274,8 +274,9 @@ describe("approve profile_update", () => {
   test("approving appends the change to profile.json", async () => {
     await request(app).post(`/api/pending/${itemId}/approve`).set(auth()).expect(200);
     const dataRes = await request(app).get("/api/data").set(auth());
-    expect(dataRes.body.profile).toContain("SESSION LENGTH");
-    expect(dataRes.body.profile).toContain("Prefers sessions under 2 hours.");
+    const section = dataRes.body.profile.find(s => s.name === "SESSION LENGTH");
+    expect(section).toBeDefined();
+    expect(section.text).toBe("Prefers sessions under 2 hours.");
   });
 });
 
@@ -354,7 +355,7 @@ describe("POST /api/pending/approve-all", () => {
         caveats:       [{ id: "a3", title: "Multi C", mode: "action", risk: "medium", hours: "8", note: "", rank: 1 }],
         decompression: [], yourCall: [], played: []
       },
-      profile: "CORE\nbaseline."
+      profile: [{ name: "CORE", text: "baseline." }]
     });
 
     // Clear any leftover pending items by rejecting them all
@@ -403,8 +404,9 @@ describe("POST /api/pending/approve-all", () => {
     expect(a.note).toBe("edited via approve-all");
 
     // profile_update: PACING section appended
-    expect(profile).toContain("PACING");
-    expect(profile).toContain("Short sessions preferred.");
+    const pacingSection = profile.find(s => s.name === "PACING");
+    expect(pacingSection).toBeDefined();
+    expect(pacingSection.text).toBe("Short sessions preferred.");
   });
 
   test("history shows all four as approved", async () => {

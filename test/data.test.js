@@ -53,7 +53,7 @@ describe("POST /api/data", () => {
     const res = await request(app)
       .post("/api/data")
       .set(auth())
-      .send({ profile: "My taste profile text." })
+      .send({ profile: [{ name: "CORE IDENTITY", text: "I love atmospheric games." }] })
       .expect(200);
     expect(res.body.ok).toBe(true);
   });
@@ -69,7 +69,7 @@ describe("data round-trip", () => {
     yourCall:      [],
     played:        [{ id: "p1", title: "SOMA", playedDate: "1/1/2024" }]
   };
-  const profile = "CORE IDENTITY\nI love atmospheric games.";
+  const profile = [{ name: "CORE IDENTITY", text: "I love atmospheric games." }];
 
   beforeAll(async () => {
     await request(app).post("/api/data").set(auth()).send({ games, profile });
@@ -78,15 +78,15 @@ describe("data round-trip", () => {
   test("GET /api/data returns exactly what was saved", async () => {
     const res = await request(app).get("/api/data").set(auth()).expect(200);
     expect(res.body.games).toEqual(games);
-    expect(res.body.profile).toBe(profile);
+    expect(res.body.profile).toEqual(profile);
   });
 
   test("partial POST only updates provided fields", async () => {
-    const newProfile = "Updated profile.";
+    const newProfile = [{ name: "UPDATED", text: "Updated profile." }];
     await request(app).post("/api/data").set(auth()).send({ profile: newProfile });
     const res = await request(app).get("/api/data").set(auth());
     expect(res.body.games).toEqual(games); // unchanged
-    expect(res.body.profile).toBe(newProfile);
+    expect(res.body.profile).toEqual(newProfile);
   });
 });
 
@@ -98,7 +98,7 @@ describe("POST /api/data validation", () => {
     queue: [{ id: "v1", title: "Validation Seed", mode: "rpg", hours: "5", note: "" }],
     caveats: [], decompression: [], yourCall: [], played: []
   };
-  const goodProfile = "VALIDATION SEED\nbaseline.";
+  const goodProfile = [{ name: "VALIDATION SEED", text: "baseline." }];
 
   beforeAll(async () => {
     await request(app).post("/api/data").set(auth()).send({ games: goodGames, profile: goodProfile });
@@ -107,7 +107,7 @@ describe("POST /api/data validation", () => {
   async function expectStateUnchanged() {
     const res = await request(app).get("/api/data").set(auth());
     expect(res.body.games).toEqual(goodGames);
-    expect(res.body.profile).toBe(goodProfile);
+    expect(res.body.profile).toEqual(goodProfile);
   }
 
   test("rejects games: null", async () => {
@@ -130,7 +130,7 @@ describe("POST /api/data validation", () => {
     await expectStateUnchanged();
   });
 
-  test("rejects profile as a non-string", async () => {
+  test("rejects profile as a non-array", async () => {
     await request(app).post("/api/data").set(auth()).send({ profile: 42 }).expect(400);
     await expectStateUnchanged();
   });
@@ -189,12 +189,12 @@ describe("POST /api/import", () => {
   });
 
   test("rejects payload missing games", async () => {
-    await request(app).post("/api/import").set(auth()).send({ profile: "x" }).expect(400);
+    await request(app).post("/api/import").set(auth()).send({ profile: [] }).expect(400);
   });
 
   test("rejects games with non-array category", async () => {
     await request(app).post("/api/import").set(auth())
-      .send({ games: { queue: "oops" }, profile: "x" }).expect(400);
+      .send({ games: { queue: "oops" }, profile: [] }).expect(400);
   });
 
   test("replaces all data on success", async () => {
@@ -202,11 +202,12 @@ describe("POST /api/import", () => {
       inbox: [{ id: "imp1", title: "Imported Game", url: "https://example.com" }],
       queue: [], caveats: [], decompression: [], yourCall: [], played: []
     };
+    const importedProfile = [{ name: "IMPORTED PROFILE", text: "hello." }];
     await request(app).post("/api/import").set(auth())
-      .send({ games, profile: "IMPORTED PROFILE\nhello." }).expect(200);
+      .send({ games, profile: importedProfile }).expect(200);
     const res = await request(app).get("/api/data").set(auth());
     expect(res.body.games.inbox[0].title).toBe("Imported Game");
     expect(res.body.games.inbox[0].url).toBe("https://example.com");
-    expect(res.body.profile).toBe("IMPORTED PROFILE\nhello.");
+    expect(res.body.profile).toEqual(importedProfile);
   });
 });

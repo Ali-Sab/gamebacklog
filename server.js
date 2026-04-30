@@ -300,12 +300,12 @@ app.post("/api/import", requireAuth, (req, res) => {
       return res.status(400).json({ error: `games.${cat} must be an array` });
     }
   }
-  if (profile != null && typeof profile !== "string") {
-    return res.status(400).json({ error: "profile must be a string or null" });
+  if (profile != null && !Array.isArray(profile)) {
+    return res.status(400).json({ error: "profile must be an array or null" });
   }
   db.transaction(() => {
     writeJSON("games.json", games);
-    writeJSON("profile.json", profile ?? "");
+    writeJSON("profile.json", profile ?? []);
   })();
   res.json({ ok: true });
 });
@@ -324,8 +324,8 @@ app.post("/api/data", requireAuth, (req, res) => {
       }
     }
   }
-  if (profile !== undefined && typeof profile !== "string") {
-    return res.status(400).json({ error: "profile must be a string" });
+  if (profile !== undefined && !Array.isArray(profile)) {
+    return res.status(400).json({ error: "profile must be an array" });
   }
   db.transaction(() => {
     if (games   !== undefined) writeJSON("games.json", games);
@@ -349,7 +349,7 @@ app.get("/api/pending", requireAuth, (req, res) => {
 function loadCtx() {
   return {
     games:   readJSON("games.json", {})   || {},
-    profile: readJSON("profile.json", "") || ""
+    profile: readJSON("profile.json", []) || []
   };
 }
 

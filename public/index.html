@@ -98,11 +98,18 @@
   /* Profile tab */
   .profile-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; }
   .profile-meta { font-size: 13px; color: var(--muted); font-style: italic; margin-top: 4px; }
-  .profile-view { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 24px; max-height: 75vh; overflow-y: auto; }
-  .profile-section { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); margin-top: 22px; margin-bottom: 8px; }
-  .profile-section:first-child { margin-top: 0; }
-  .profile-body { font-size: 14px; color: var(--sub); line-height: 1.8; }
-  .profile-textarea { width: 100%; min-height: 600px; background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 13px; line-height: 1.7; padding: 16px; border-radius: 8px; resize: vertical; }
+  .profile-view { max-height: 75vh; overflow-y: auto; }
+  .profile-section-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px 24px; margin-bottom: 14px; }
+  .profile-section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .profile-section-name { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); flex: 1; }
+  .profile-section-actions { display: flex; gap: 6px; opacity: 0; transition: opacity 0.15s; }
+  .profile-section-card:hover .profile-section-actions { opacity: 1; }
+  .profile-body { font-size: 14px; color: var(--sub); line-height: 1.8; white-space: pre-wrap; }
+  .profile-section-edit { width: 100%; }
+  .profile-name-input { width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--gold); font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; padding: 6px 10px; border-radius: 6px; margin-bottom: 8px; }
+  .profile-text-textarea { width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 13px; line-height: 1.7; padding: 12px; border-radius: 6px; resize: vertical; min-height: 100px; }
+  .profile-section-edit-btns { display: flex; gap: 8px; margin-top: 8px; }
+  .profile-add-section { margin-top: 8px; }
 
   /* Pending tab */
   .pending-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px 22px; margin-bottom: 14px; }
@@ -310,7 +317,6 @@
             <div class="profile-meta">Fed to Claude as context on every message</div>
           </div>
           <div style="display:flex;gap:8px;" id="profile-btns">
-            <button class="btn btn-ghost" onclick="editProfile()">Edit Profile</button>
           </div>
         </div>
         <div id="profile-content"></div>
@@ -470,7 +476,6 @@ let riskFilter = null;
 let mfaToken = null;
 let pendingItems = [];
 let pendingPollTimer = null;
-let profileEditing = false;
 let historyVisible = false;
 let editingNote = null;
 let globalSearchQuery = '';
@@ -1195,31 +1200,75 @@ function showImportMsg(kind, text) {
 // ═══════════════════════════════════════════════════════════
 // PROFILE
 // ═══════════════════════════════════════════════════════════
+let profileEditingIdx = null; // index of section being edited, or null
+
 function renderProfile() {
   const el = document.getElementById('profile-content');
-  if (profileEditing) {
-    document.getElementById('profile-btns').innerHTML = `
-      <button class="btn btn-gold" onclick="saveProfile()">Save</button>
-      <button class="btn btn-ghost" onclick="cancelEditProfile()">Cancel</button>`;
-    el.innerHTML = `<textarea class="profile-textarea" id="profile-textarea">${esc(appProfile)}</textarea>`;
-    return;
-  }
-  document.getElementById('profile-btns').innerHTML = `<button class="btn btn-ghost" onclick="editProfile()">Edit Profile</button>`;
-  const lines = (appProfile||'').split('\n');
-  el.innerHTML = `<div class="profile-view">${lines.map(line => {
-    if (/^[A-Z][A-Z\s]+$/.test(line.trim()) && line.trim().length > 2)
-      return `<div class="profile-section">${esc(line)}</div>`;
-    if (!line.trim()) return `<div style="height:8px"></div>`;
-    return `<div class="profile-body">${esc(line)}</div>`;
-  }).join('')}</div>`;
+  const sections = Array.isArray(appProfile) ? appProfile : [];
+  document.getElementById('profile-btns').innerHTML = '';
+
+  const cards = sections.map((s, i) => {
+    if (profileEditingIdx === i) {
+      return `<div class="profile-section-card">
+        <div class="profile-section-edit">
+          <input class="profile-name-input" id="pname-${i}" value="${esc(s.name)}" placeholder="SECTION NAME">
+          <textarea class="profile-text-textarea" id="ptext-${i}">${esc(s.text)}</textarea>
+          <div class="profile-section-edit-btns">
+            <button class="btn btn-gold" style="font-size:12px;padding:5px 12px" onclick="saveSection(${i})">Save</button>
+            <button class="btn btn-ghost" style="font-size:12px;padding:5px 12px" onclick="cancelEditSection()">Cancel</button>
+            <button class="btn btn-ghost" style="font-size:12px;padding:5px 12px;color:var(--danger,#f87171);margin-left:auto" onclick="deleteSection(${i})">Delete</button>
+          </div>
+        </div>
+      </div>`;
+    }
+    return `<div class="profile-section-card">
+      <div class="profile-section-header">
+        <div class="profile-section-name">${esc(s.name)}</div>
+        <div class="profile-section-actions">
+          <button class="btn btn-ghost" style="font-size:11px;padding:3px 10px" onclick="editSection(${i})">Edit</button>
+        </div>
+      </div>
+      <div class="profile-body">${esc(s.text)}</div>
+    </div>`;
+  }).join('');
+
+  const addBtn = profileEditingIdx === null
+    ? `<div class="profile-add-section"><button class="btn btn-ghost" onclick="addSection()">+ Add Section</button></div>`
+    : '';
+
+  el.innerHTML = `<div class="profile-view">${cards}${addBtn}</div>`;
 }
 
-function editProfile() { profileEditing = true; renderProfile(); }
-function cancelEditProfile() { profileEditing = false; renderProfile(); }
-async function saveProfile() {
-  appProfile = document.getElementById('profile-textarea').value;
-  profileEditing = false;
+function editSection(i) { profileEditingIdx = i; renderProfile(); }
+function cancelEditSection() { profileEditingIdx = null; renderProfile(); }
+
+async function saveSection(i) {
+  const name = document.getElementById(`pname-${i}`).value.trim();
+  const text = document.getElementById(`ptext-${i}`).value;
+  if (!name) return;
+  const sections = Array.isArray(appProfile) ? [...appProfile] : [];
+  sections[i] = { name, text };
+  appProfile = sections;
+  profileEditingIdx = null;
   await saveData();
+  renderProfile();
+}
+
+async function deleteSection(i) {
+  if (!confirm('Delete this section?')) return;
+  const sections = Array.isArray(appProfile) ? [...appProfile] : [];
+  sections.splice(i, 1);
+  appProfile = sections;
+  profileEditingIdx = null;
+  await saveData();
+  renderProfile();
+}
+
+function addSection() {
+  const sections = Array.isArray(appProfile) ? [...appProfile] : [];
+  sections.push({ name: 'NEW SECTION', text: '' });
+  appProfile = sections;
+  profileEditingIdx = sections.length - 1;
   renderProfile();
 }
 
@@ -1506,46 +1555,21 @@ function getInitialGames() {
 }
 
 function getDefaultProfile() {
-  return `CORE IDENTITY
-You prioritize story and atmosphere above all else, followed by strategic planning depth, then mechanical mastery, with chill exploration last. You respond to games that feel deliberately crafted with something to say. Every game you love feels authored and intentional; every game you bounce from feels bloated, hollow, or mechanically arbitrary.
-
-WHAT CAPTURES YOU
-Singular, purposeful protagonist missions — not open sandboxes, not "go do quests," but one thing that matters and won't let you look away. Sekiro (save the boy, fix the immortality curse), Hollow Knight, Ghost of Tsushima, Aliens: The Dark Descent, SOMA — all of these gave you a clear authored mission with emotional stakes. You respond to small groups of characters you care about deeply rather than large, replaceable armies.
-
-EMOTIONAL REGISTER
-You gravitate toward games that are quietly devastating beneath a deceptive surface — Omori looks like a cute RPG then methodically dismantles you. SOMA looks like survival horror then forces you to confront what consciousness is. You like existential dread over jump scares, grief and identity as themes. The OST matters: Omori's, Night in the Woods', Clair Obscur's — music carrying emotional weight is a significant factor.
-
-DIFFICULTY AND DEATH
-You have a higher skill ceiling than your anxiety profile initially suggests. You beat Sekiro faster than average. You loved Dead Cells, GoW Ragnarök, Ghostrunner 1. The real filter isn't difficulty — it's ambiguity around whether you should have lost. In Rimworld, when a pawn dies you can't tell if it was avoidable or RNG or a mistake from hours ago. That uncertainty triggers save-scumming. In Dead Cells, the contract is explicit: death is the designed state. In Sekiro, boss patterns are learnable — death always teaches something specific. You're fine with hard games when: (1) death feels fair and legible, (2) the scope of loss is bounded, (3) the game's contract around failure is clear from the start.
-
-SAVE SYSTEM
-You strongly prefer save-anywhere, but checkpoint systems are acceptable when generous. What matters is not losing large swaths of progress to ambiguous failure. This is about maintaining authorship over outcomes, not avoiding difficulty.
-
-OPEN WORLD TOLERANCE
-You have obligation fatigue — not scope fatigue. Skyrim works because it never makes you feel behind. Witcher 3 fails because it buries you in nested quest chains that make you feel wrong for skipping. Elden Ring fails because it's too much to do with no authored priority. The rule: optional content that creates completionist guilt = bad. Optional content that feels like genuine discovery = fine.
-
-ROGUELIKE TOLERANCE
-Moderate-to-good. Dead Cells (pure loop, legible deaths, fast respawn) and GoW Valhalla DLC (familiar combat, narrative justification for each run) confirmed tolerance. You'll likely enjoy Hades. You struggle when: (1) runs are very long and death is ambiguous, (2) the loop generates parallel obligation anxiety.
-
-STRATEGY / 4X
-High ceiling when systems generate stories. Stellaris: 100+ hours. Shogun II: 200+ hours. You burned out of Warhammer II at 44h because Lizardmen felt disposable. Tyrion (High Elf) worked — elite precious units feel meaningful. GalCiv III is a hard skip — drier than Stellaris with a fraction of the narrative richness.
-
-GRAPHICS AND ART
-You need coherent intentional art direction. Not fine with games that look like technical limitations. Fine with: pixel art when deliberately aesthetic (Omori), lo-fi horror when coherently committed, minimalist stylized art (Inside, Limbo, Hollow Knight). Not fine with: new games pretending to be old, visual incoherence, mismatched abstract mess.
-
-SESSION LENGTH
-Medium sessions (1–2 hours) typical. Some longer sessions possible for the right game. Games should be easily pauseable without guilt.
-
-GENRE HISTORY (CONFIRMED FITS)
-Immersive sim (Prey, Dishonored, Deus Ex), Atmospheric horror quiet/existential (SOMA, Amnesia), Atmospheric horror action (Dead Space 1+2, Callisto Protocol), Narrative adventure (Night in the Woods, Omori, Hollow Knight), Soulslike when story warrants it (Sekiro, Ghostrunner), Tactical small-squad (Aliens: Dark Descent), Metroidvania (Hollow Knight).
-
-GENRE HARD LIMITS
-Large army management, Live service multiplayer, Pure reflex arcade with no story, Open world collectathons with map markers everywhere, Extreme open-ended 4X with no narrative hook.
-
-KEY REFERENCE GAMES
-Loved: Sekiro, Hollow Knight, Ghost of Tsushima, Skyrim, SOMA, Amnesia, Dead Space 1+2, Aliens: The Dark Descent, Omori, Stellaris (100h), Shogun II (200h), RDR2, GTA V, Dying Light 1+2, Ghostrunner 1, GoW Ragnarok + Valhalla DLC, Dead Cells, Factorio
-Bounced: Witcher 3 (25h, obligation fog), Elden Ring (10h, too much to do), GalCiv III (parallel optimization), late Rimworld (ambiguous losses at scale)
-Decent/OK: Callisto Protocol (strong start, shallow end), Nioh (mechanically punishing without story payoff)`;
+  return [
+    { name: 'CORE IDENTITY', text: 'You prioritize story and atmosphere above all else, followed by strategic planning depth, then mechanical mastery, with chill exploration last. You respond to games that feel deliberately crafted with something to say. Every game you love feels authored and intentional; every game you bounce from feels bloated, hollow, or mechanically arbitrary.' },
+    { name: 'WHAT CAPTURES YOU', text: 'Singular, purposeful protagonist missions — not open sandboxes, not "go do quests," but one thing that matters and won\'t let you look away. Sekiro (save the boy, fix the immortality curse), Hollow Knight, Ghost of Tsushima, Aliens: The Dark Descent, SOMA — all of these gave you a clear authored mission with emotional stakes. You respond to small groups of characters you care about deeply rather than large, replaceable armies.' },
+    { name: 'EMOTIONAL REGISTER', text: 'You gravitate toward games that are quietly devastating beneath a deceptive surface — Omori looks like a cute RPG then methodically dismantles you. SOMA looks like survival horror then forces you to confront what consciousness is. You like existential dread over jump scares, grief and identity as themes. The OST matters: Omori\'s, Night in the Woods\', Clair Obscur\'s — music carrying emotional weight is a significant factor.' },
+    { name: 'DIFFICULTY AND DEATH', text: 'You have a higher skill ceiling than your anxiety profile initially suggests. You beat Sekiro faster than average. You loved Dead Cells, GoW Ragnarök, Ghostrunner 1. The real filter isn\'t difficulty — it\'s ambiguity around whether you should have lost. In Rimworld, when a pawn dies you can\'t tell if it was avoidable or RNG or a mistake from hours ago. That uncertainty triggers save-scumming. In Dead Cells, the contract is explicit: death is the designed state. In Sekiro, boss patterns are learnable — death always teaches something specific. You\'re fine with hard games when: (1) death feels fair and legible, (2) the scope of loss is bounded, (3) the game\'s contract around failure is clear from the start.' },
+    { name: 'SAVE SYSTEM', text: 'You strongly prefer save-anywhere, but checkpoint systems are acceptable when generous. What matters is not losing large swaths of progress to ambiguous failure. This is about maintaining authorship over outcomes, not avoiding difficulty.' },
+    { name: 'OPEN WORLD TOLERANCE', text: 'You have obligation fatigue — not scope fatigue. Skyrim works because it never makes you feel behind. Witcher 3 fails because it buries you in nested quest chains that make you feel wrong for skipping. Elden Ring fails because it\'s too much to do with no authored priority. The rule: optional content that creates completionist guilt = bad. Optional content that feels like genuine discovery = fine.' },
+    { name: 'ROGUELIKE TOLERANCE', text: 'Moderate-to-good. Dead Cells (pure loop, legible deaths, fast respawn) and GoW Valhalla DLC (familiar combat, narrative justification for each run) confirmed tolerance. You\'ll likely enjoy Hades. You struggle when: (1) runs are very long and death is ambiguous, (2) the loop generates parallel obligation anxiety.' },
+    { name: 'STRATEGY / 4X', text: 'High ceiling when systems generate stories. Stellaris: 100+ hours. Shogun II: 200+ hours. You burned out of Warhammer II at 44h because Lizardmen felt disposable. Tyrion (High Elf) worked — elite precious units feel meaningful. GalCiv III is a hard skip — drier than Stellaris with a fraction of the narrative richness.' },
+    { name: 'GRAPHICS AND ART', text: 'You need coherent intentional art direction. Not fine with games that look like technical limitations. Fine with: pixel art when deliberately aesthetic (Omori), lo-fi horror when coherently committed, minimalist stylized art (Inside, Limbo, Hollow Knight). Not fine with: new games pretending to be old, visual incoherence, mismatched abstract mess.' },
+    { name: 'SESSION LENGTH', text: 'Medium sessions (1–2 hours) typical. Some longer sessions possible for the right game. Games should be easily pauseable without guilt.' },
+    { name: 'GENRE HISTORY (CONFIRMED FITS)', text: 'Immersive sim (Prey, Dishonored, Deus Ex), Atmospheric horror quiet/existential (SOMA, Amnesia), Atmospheric horror action (Dead Space 1+2, Callisto Protocol), Narrative adventure (Night in the Woods, Omori, Hollow Knight), Soulslike when story warrants it (Sekiro, Ghostrunner), Tactical small-squad (Aliens: Dark Descent), Metroidvania (Hollow Knight).' },
+    { name: 'GENRE HARD LIMITS', text: 'Large army management, Live service multiplayer, Pure reflex arcade with no story, Open world collectathons with map markers everywhere, Extreme open-ended 4X with no narrative hook.' },
+    { name: 'KEY REFERENCE GAMES', text: 'Loved: Sekiro, Hollow Knight, Ghost of Tsushima, Skyrim, SOMA, Amnesia, Dead Space 1+2, Aliens: The Dark Descent, Omori, Stellaris (100h), Shogun II (200h), RDR2, GTA V, Dying Light 1+2, Ghostrunner 1, GoW Ragnarok + Valhalla DLC, Dead Cells, Factorio\nBounced: Witcher 3 (25h, obligation fog), Elden Ring (10h, too much to do), GalCiv III (parallel optimization), late Rimworld (ambiguous losses at scale)\nDecent/OK: Callisto Protocol (strong start, shallow end), Nioh (mechanically punishing without story payoff)' },
+  ];
 }
 
 // ═══════════════════════════════════════════════════════════

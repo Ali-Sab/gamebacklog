@@ -77,7 +77,7 @@ test("approve button calls approve endpoint and removes card", async ({ page }) 
         queue: [{ id: "hk-01", title: "Hollow Knight", mode: "atmospheric", risk: "", hours: "40", note: "" }],
         caveats: [], decompression: [], yourCall: [], played: []
       },
-      profile: "Test profile"
+      profile: [{ name: "CORE", text: "Test profile" }]
     }
   });
 
@@ -221,7 +221,7 @@ test("approve-all button approves every pending item in one click", async ({ pag
         queue: [{ id: "ea1", title: "EA Move Me", mode: "rpg", risk: "", hours: "10", note: "" }],
         caveats: [], decompression: [], yourCall: [], played: []
       },
-      profile: "BASE\nbaseline."
+      profile: [{ name: "BASE", text: "baseline." }]
     }
   });
 
@@ -255,7 +255,7 @@ test("approve-all button approves every pending item in one click", async ({ pag
   expect(games.played.some(g => g.title === "EA Move Me")).toBe(true);
   expect(games.queue.some(g => g.title === "EA Move Me")).toBe(false);
   expect(games.decompression.some(g => g.title === "EA Brand New")).toBe(true);
-  expect(profile).toContain("EA SECTION");
+  expect(Array.isArray(profile) && profile.some(s => s.name === "EA SECTION")).toBe(true);
 });
 
 test("reorder card renders and approving applies new ranks", async ({ page }) => {
@@ -272,7 +272,7 @@ test("reorder card renders and approving applies new ranks", async ({ page }) =>
         ],
         caveats: [], decompression: [], yourCall: [], played: []
       },
-      profile: ""
+      profile: []
     }
   });
 
