@@ -19,7 +19,7 @@ afterAll(() => fs.rmSync(DATA_DIR, { recursive: true, force: true }));
 describe("GET /api/setup/status", () => {
   test("returns configured:false before setup", async () => {
     const res = await request(app).get("/api/setup/status").expect(200);
-    expect(res.body).toEqual({ configured: false });
+    expect(res.body).toMatchObject({ configured: false });
   });
 });
 
@@ -70,7 +70,7 @@ describe("POST /api/setup", () => {
 describe("GET /api/setup/status (after setup)", () => {
   test("returns configured:true", async () => {
     const res = await request(app).get("/api/setup/status").expect(200);
-    expect(res.body).toEqual({ configured: true });
+    expect(res.body).toMatchObject({ configured: true });
   });
 });
 

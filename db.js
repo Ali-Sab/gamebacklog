@@ -63,6 +63,29 @@ db.exec(`
     secret     TEXT NOT NULL,
     created_at INTEGER NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS passkey_credentials (
+    credential_id TEXT PRIMARY KEY,
+    public_key    TEXT NOT NULL,
+    counter       INTEGER NOT NULL DEFAULT 0,
+    device_name   TEXT,
+    created_at    TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS webauthn_challenges (
+    id         INTEGER PRIMARY KEY CHECK (id = 1),
+    challenge  TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS setup_state (
+    id          INTEGER PRIMARY KEY CHECK (id = 1),
+    username    TEXT,
+    hash        TEXT,
+    salt        TEXT,
+    challenge   TEXT,
+    created_at  INTEGER NOT NULL
+  );
 `);
 
 // ─── Games ────────────────────────────────────────────────────────────────────
@@ -262,6 +285,79 @@ function writePendingSetup(obj) {
   `).run(obj.secret, obj.createdAt);
 }
 
+// ─── Passkey credentials ──────────────────────────────────────────────────────
+
+function readPasskeyCredentials() {
+  return db.prepare("SELECT * FROM passkey_credentials").all().map(row => ({
+    credentialId: row.credential_id,
+    publicKey:    row.public_key,
+    counter:      row.counter,
+    deviceName:   row.device_name,
+    createdAt:    row.created_at,
+  }));
+}
+
+function writePasskeyCredential(cred) {
+  db.prepare(`
+    INSERT INTO passkey_credentials (credential_id, public_key, counter, device_name, created_at)
+    VALUES (@credential_id, @public_key, @counter, @device_name, @created_at)
+    ON CONFLICT(credential_id) DO UPDATE SET
+      public_key=excluded.public_key, counter=excluded.counter,
+      device_name=excluded.device_name
+  `).run({
+    credential_id: cred.credentialId,
+    public_key:    cred.publicKey,
+    counter:       cred.counter ?? 0,
+    device_name:   cred.deviceName ?? null,
+    created_at:    cred.createdAt ?? new Date().toISOString(),
+  });
+}
+
+function deletePasskeyCredential(credentialId) {
+  db.prepare("DELETE FROM passkey_credentials WHERE credential_id = ?").run(credentialId);
+}
+
+// ─── WebAuthn challenge (login / add-device) ──────────────────────────────────
+
+function readWebAuthnChallenge() {
+  const row = db.prepare("SELECT * FROM webauthn_challenges WHERE id = 1").get();
+  if (!row) return null;
+  return { challenge: row.challenge, createdAt: row.created_at };
+}
+
+function writeWebAuthnChallenge(obj) {
+  if (obj === null) {
+    db.prepare("DELETE FROM webauthn_challenges WHERE id = 1").run();
+    return;
+  }
+  db.prepare(`
+    INSERT INTO webauthn_challenges (id, challenge, created_at) VALUES (1, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET challenge=excluded.challenge, created_at=excluded.created_at
+  `).run(obj.challenge, obj.createdAt);
+}
+
+// ─── Setup state (in-progress first-run registration) ─────────────────────────
+
+function readSetupState() {
+  const row = db.prepare("SELECT * FROM setup_state WHERE id = 1").get();
+  if (!row) return null;
+  return { username: row.username, hash: row.hash, salt: row.salt, challenge: row.challenge, createdAt: row.created_at };
+}
+
+function writeSetupState(obj) {
+  if (obj === null) {
+    db.prepare("DELETE FROM setup_state WHERE id = 1").run();
+    return;
+  }
+  db.prepare(`
+    INSERT INTO setup_state (id, username, hash, salt, challenge, created_at)
+    VALUES (1, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      username=excluded.username, hash=excluded.hash, salt=excluded.salt,
+      challenge=excluded.challenge, created_at=excluded.created_at
+  `).run(obj.username, obj.hash, obj.salt, obj.challenge, obj.createdAt);
+}
+
 // ─── readJSON / writeJSON drop-in replacements ───────────────────────────────
 
 function readJSON(file, def) {
@@ -272,7 +368,10 @@ function readJSON(file, def) {
       case "pending.json":       return readPending();
       case "credentials.json":   return readCredentials();
       case "refresh_tokens.json": return readRefreshTokens();
-      case "pending_setup.json": return readPendingSetup();
+      case "pending_setup.json":         return readPendingSetup();
+      case "passkey_credentials.json":   return readPasskeyCredentials();
+      case "webauthn_challenge.json":    return readWebAuthnChallenge();
+      case "setup_state.json":           return readSetupState();
       default: return def;
     }
   } catch {
@@ -287,8 +386,10 @@ function writeJSON(file, data) {
     case "pending.json":        return writePending(data);
     case "credentials.json":    return writeCredentials(data);
     case "refresh_tokens.json": return writeRefreshTokens(data);
-    case "pending_setup.json":  return writePendingSetup(data);
+    case "pending_setup.json":        return writePendingSetup(data);
+    case "webauthn_challenge.json":   return writeWebAuthnChallenge(data);
+    case "setup_state.json":          return writeSetupState(data);
   }
 }
 
-module.exports = { db, readJSON, writeJSON };
+module.exports = { db, readJSON, writeJSON, writePasskeyCredential, deletePasskeyCredential };
