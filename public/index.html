@@ -204,19 +204,15 @@
         <div id="setup-error1" class="error-msg hidden"></div>
         <div class="btn-row"><button class="btn btn-gold" onclick="setupStep1()">Continue →</button></div>
       </div>
-      <!-- Step 2: TOTP -->
+      <!-- Step 2: Passkey registration -->
       <div id="setup-step2" class="hidden">
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:16px;">
-          <div style="font-size:12px;font-weight:600;color:var(--gold);margin-bottom:10px;">Set Up Authenticator</div>
-          <div style="font-size:13px;color:var(--sub);line-height:1.7;margin-bottom:14px;">Scan this QR code with Google Authenticator, Authy, or any TOTP app — or enter the key manually:</div>
-          <div style="text-align:center;margin:12px 0;"><img id="setup-qr" src="" alt="QR Code" style="width:160px;height:160px;image-rendering:pixelated;border:4px solid #fff;border-radius:4px;"></div>
-          <div class="secret-box" id="setup-secret-display"></div>
-          <div style="font-size:12px;color:var(--muted);text-align:center;">Account: GameBacklog · Time-based (TOTP)</div>
+          <div style="font-size:12px;font-weight:600;color:var(--gold);margin-bottom:10px;">Register This Device</div>
+          <div style="font-size:13px;color:var(--sub);line-height:1.7;">Your browser will prompt you for Touch ID, Face ID, or your device PIN. This creates a passkey — nothing to memorize or lose.</div>
         </div>
-        <div class="field"><label>Verify — enter the 6-digit code from your app</label><input id="setup-totp" type="text" placeholder="000000" maxlength="6"></div>
         <div id="setup-error2" class="error-msg hidden"></div>
         <div class="btn-row">
-          <button class="btn btn-gold" onclick="setupComplete()">Complete Setup</button>
+          <button class="btn btn-gold" onclick="setupRegisterPasskey()">Register This Device →</button>
           <button class="btn btn-ghost" onclick="showSetupStep1()">← Back</button>
         </div>
       </div>
@@ -228,26 +224,44 @@
     <div class="screen-box">
       <div class="screen-tag">Private Access</div>
       <h1 class="screen-title">Game Backlog</h1>
-      <div id="login-step1">
-        <div class="field"><label>Username</label><input id="login-username" type="text" placeholder="username"></div>
-        <div class="field"><label>Password</label><input id="login-password" type="password" placeholder="password"></div>
-        <div class="checkbox-row">
-          <input type="checkbox" id="login-remember" checked>
-          <label for="login-remember">Remember me for 30 days (skip MFA)</label>
-        </div>
-        <div id="login-error1" class="error-msg hidden"></div>
-        <div class="btn-row"><button class="btn btn-gold" onclick="loginStep1()">Continue →</button></div>
-      </div>
-      <div id="login-step2" class="hidden">
-        <div class="field">
-          <label>Authenticator Code</label>
-          <input id="login-totp" type="text" placeholder="000000" maxlength="6">
-          <div class="field-hint">Enter the 6-digit code from your authenticator app</div>
-        </div>
-        <div id="login-error2" class="error-msg hidden"></div>
+
+      <!-- Passkey login (shown when passkeys are registered) -->
+      <div id="login-passkey-section">
+        <div id="login-error-pk" class="error-msg hidden"></div>
         <div class="btn-row">
-          <button class="btn btn-gold" onclick="loginStep2()">Verify & Sign In</button>
-          <button class="btn btn-ghost" onclick="showLoginStep1()">← Back</button>
+          <button class="btn btn-gold" onclick="loginWithPasskey()">Sign In with Passkey</button>
+        </div>
+        <div style="text-align:center;margin-top:14px;">
+          <button class="btn btn-ghost btn-sm" onclick="showPasswordLogin()">Use password instead</button>
+        </div>
+      </div>
+
+      <!-- Password + TOTP login (fallback / legacy) -->
+      <div id="login-password-section" class="hidden">
+        <div id="login-step1">
+          <div class="field"><label>Username</label><input id="login-username" type="text" placeholder="username"></div>
+          <div class="field"><label>Password</label><input id="login-password" type="password" placeholder="password"></div>
+          <div class="checkbox-row">
+            <input type="checkbox" id="login-remember" checked>
+            <label for="login-remember">Remember me for 30 days</label>
+          </div>
+          <div id="login-error1" class="error-msg hidden"></div>
+          <div class="btn-row"><button class="btn btn-gold" onclick="loginStep1()">Continue →</button></div>
+        </div>
+        <div id="login-step2" class="hidden">
+          <div class="field">
+            <label>Authenticator Code</label>
+            <input id="login-totp" type="text" placeholder="000000" maxlength="6">
+            <div class="field-hint">Enter the 6-digit code from your authenticator app</div>
+          </div>
+          <div id="login-error2" class="error-msg hidden"></div>
+          <div class="btn-row">
+            <button class="btn btn-gold" onclick="loginStep2()">Verify & Sign In</button>
+            <button class="btn btn-ghost" onclick="showLoginStep1()">← Back</button>
+          </div>
+        </div>
+        <div style="text-align:center;margin-top:14px;" id="login-back-to-passkey-row">
+          <button class="btn btn-ghost btn-sm" onclick="showPasskeyLogin()">← Use passkey instead</button>
         </div>
       </div>
     </div>
@@ -375,6 +389,13 @@
           <div id="import-msg" class="hidden" style="margin-top:8px;"></div>
         </div>
         <div class="settings-section">
+          <div class="settings-title">Passkeys</div>
+          <div class="settings-desc">Devices registered for passwordless sign-in.</div>
+          <div id="passkey-list" style="margin-bottom:12px;"></div>
+          <button class="btn btn-ghost" onclick="addPasskeyDevice()">+ Register Another Device</button>
+          <div id="passkey-msg" class="hidden" style="margin-top:8px;font-size:13px;"></div>
+        </div>
+        <div class="settings-section">
           <div class="settings-title">Connect Claude</div>
           <div class="settings-desc">To connect Claude.ai to your game library via MCP:</div>
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 22px;font-size:13px;line-height:2.0;color:var(--sub);">
@@ -474,6 +495,7 @@ let activeCat = 'queue';
 let modeFilter = null;
 let riskFilter = null;
 let mfaToken = null;
+let loginHasPasskeys = false;
 let pendingItems = [];
 let pendingPollTimer = null;
 let historyVisible = false;
@@ -506,22 +528,99 @@ async function refreshAccessToken() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// PASSKEY HELPERS
+// ═══════════════════════════════════════════════════════════
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function b64uDecode(str) {
+  const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = (4 - b64.length % 4) % 4;
+  const bin = atob(b64 + '='.repeat(pad));
+  return Uint8Array.from(bin, c => c.charCodeAt(0)).buffer;
+}
+
+function b64uEncode(buf) {
+  const bytes = buf instanceof ArrayBuffer ? new Uint8Array(buf) : new Uint8Array(buf.buffer || buf);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+function decodeRegistrationOptions(opts) {
+  return {
+    ...opts,
+    challenge: b64uDecode(opts.challenge),
+    user: { ...opts.user, id: b64uDecode(opts.user.id) },
+    excludeCredentials: (opts.excludeCredentials || []).map(c => ({ ...c, id: b64uDecode(c.id) })),
+  };
+}
+
+function encodeRegistrationResponse(cred) {
+  return {
+    id:    cred.id,
+    rawId: b64uEncode(cred.rawId),
+    type:  cred.type,
+    response: {
+      clientDataJSON:    b64uEncode(cred.response.clientDataJSON),
+      attestationObject: b64uEncode(cred.response.attestationObject),
+      transports: cred.response.getTransports ? cred.response.getTransports() : [],
+    },
+  };
+}
+
+function decodeAuthenticationOptions(opts) {
+  return {
+    ...opts,
+    challenge: b64uDecode(opts.challenge),
+    allowCredentials: (opts.allowCredentials || []).map(c => ({ ...c, id: b64uDecode(c.id) })),
+  };
+}
+
+function encodeAuthenticationResponse(assertion) {
+  return {
+    id:    assertion.id,
+    rawId: b64uEncode(assertion.rawId),
+    type:  assertion.type,
+    response: {
+      clientDataJSON:    b64uEncode(assertion.response.clientDataJSON),
+      authenticatorData: b64uEncode(assertion.response.authenticatorData),
+      signature:         b64uEncode(assertion.response.signature),
+      userHandle:        assertion.response.userHandle ? b64uEncode(assertion.response.userHandle) : undefined,
+    },
+  };
+}
+
+// ═══════════════════════════════════════════════════════════
 // BOOT
 // ═══════════════════════════════════════════════════════════
 async function boot() {
   try {
-    // Check if configured
     const status = await api('GET', '/api/setup/status', null, false);
-    if (!status.configured) { showScreen('setup'); await initSetup(); return; }
+    if (!status.configured) { showScreen('setup'); initSetup(); return; }
 
-    // Try refresh token
+    loginHasPasskeys = !!status.hasPasskeys;
+
     const ok = await refreshAccessToken();
     if (ok) { await loadApp(); return; }
 
-    showScreen('login');
+    showLoginScreen();
   } catch(e) {
     console.error('Boot error:', e);
-    showScreen('login');
+    showLoginScreen();
+  }
+}
+
+function showLoginScreen() {
+  showScreen('login');
+  if (loginHasPasskeys) {
+    document.getElementById('login-passkey-section').classList.remove('hidden');
+    document.getElementById('login-password-section').classList.add('hidden');
+  } else {
+    document.getElementById('login-passkey-section').classList.add('hidden');
+    document.getElementById('login-password-section').classList.remove('hidden');
+    document.getElementById('login-back-to-passkey-row').classList.add('hidden');
   }
 }
 
@@ -544,10 +643,9 @@ function hideErr(id) { document.getElementById(id).classList.add('hidden'); }
 // ═══════════════════════════════════════════════════════════
 // SETUP
 // ═══════════════════════════════════════════════════════════
-async function initSetup() {
-  const data = await api('GET', '/api/setup/secret', null, false);
-  document.getElementById('setup-secret-display').textContent = data.formatted || '';
-  if (data.qrDataUrl) document.getElementById('setup-qr').src = data.qrDataUrl;
+function initSetup() {
+  document.getElementById('setup-step1').classList.remove('hidden');
+  document.getElementById('setup-step2').classList.add('hidden');
 }
 
 function showSetupStep1() {
@@ -555,7 +653,7 @@ function showSetupStep1() {
   document.getElementById('setup-step2').classList.add('hidden');
 }
 
-async function setupStep1() {
+function setupStep1() {
   hideErr('setup-error1');
   const username = document.getElementById('setup-username').value.trim();
   const password = document.getElementById('setup-password').value;
@@ -567,23 +665,68 @@ async function setupStep1() {
   document.getElementById('setup-step2').classList.remove('hidden');
 }
 
-async function setupComplete() {
+async function setupRegisterPasskey() {
   hideErr('setup-error2');
-  const username  = document.getElementById('setup-username').value.trim();
-  const password  = document.getElementById('setup-password').value;
-  const totpCode  = document.getElementById('setup-totp').value.trim();
-  const data = await api('POST', '/api/setup', { username, password, totpCode }, false);
-  if (data.error) return showErr('setup-error2', data.error);
-  showScreen('login');
+  if (!window.PublicKeyCredential) {
+    return showErr('setup-error2', 'This browser does not support passkeys');
+  }
+  const username = document.getElementById('setup-username').value.trim();
+  const password = document.getElementById('setup-password').value;
+  try {
+    const opts = await api('POST', '/api/webauthn/register/start', { username, password }, false);
+    if (opts.error) return showErr('setup-error2', opts.error);
+    const cred = await navigator.credentials.create({ publicKey: decodeRegistrationOptions(opts) });
+    const response = encodeRegistrationResponse(cred);
+    const result = await api('POST', '/api/webauthn/register/finish', response, false);
+    if (result.error) return showErr('setup-error2', result.error);
+    loginHasPasskeys = true;
+    showLoginScreen();
+  } catch (e) {
+    if (e.name === 'NotAllowedError') return showErr('setup-error2', 'Passkey registration was cancelled');
+    showErr('setup-error2', 'Failed to register passkey');
+    console.error(e);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
 // LOGIN
 // ═══════════════════════════════════════════════════════════
+function showPasswordLogin() {
+  document.getElementById('login-passkey-section').classList.add('hidden');
+  document.getElementById('login-password-section').classList.remove('hidden');
+  if (!loginHasPasskeys) document.getElementById('login-back-to-passkey-row').classList.add('hidden');
+}
+
+function showPasskeyLogin() {
+  document.getElementById('login-password-section').classList.add('hidden');
+  document.getElementById('login-passkey-section').classList.remove('hidden');
+}
+
 function showLoginStep1() {
   document.getElementById('login-step1').classList.remove('hidden');
   document.getElementById('login-step2').classList.add('hidden');
   hideErr('login-error2');
+}
+
+async function loginWithPasskey() {
+  hideErr('login-error-pk');
+  if (!window.PublicKeyCredential) {
+    return showErr('login-error-pk', 'This browser does not support passkeys');
+  }
+  try {
+    const opts = await api('POST', '/api/webauthn/login/start', {}, false);
+    if (opts.error) return showErr('login-error-pk', opts.error);
+    const assertion = await navigator.credentials.get({ publicKey: decodeAuthenticationOptions(opts) });
+    const response  = encodeAuthenticationResponse(assertion);
+    const result    = await api('POST', '/api/webauthn/login/finish', response, false);
+    if (result.error) return showErr('login-error-pk', result.error);
+    accessToken = result.accessToken;
+    await loadApp();
+  } catch (e) {
+    if (e.name === 'NotAllowedError') return showErr('login-error-pk', 'Passkey sign-in was cancelled');
+    showErr('login-error-pk', 'Passkey sign-in failed');
+    console.error(e);
+  }
 }
 
 async function loginStep1() {
@@ -646,6 +789,7 @@ function switchTab(tab) {
   if (tab === 'settings') {
     const saved = localStorage.getItem('theme') || 'void';
     document.querySelectorAll('.theme-btn').forEach(b => b.classList.toggle('active', b.dataset.theme === saved));
+    loadPasskeyList();
   }
 }
 
@@ -1405,6 +1549,60 @@ async function toggleHistory() {
         </div>`;
       }).join('');
   } catch { el.innerHTML = `<div style="color:var(--red);font-size:11px;">Failed to load history.</div>`; }
+}
+
+// ═══════════════════════════════════════════════════════════
+// PASSKEY MANAGEMENT (settings)
+// ═══════════════════════════════════════════════════════════
+async function loadPasskeyList() {
+  const list = document.getElementById('passkey-list');
+  if (!list) return;
+  const passkeys = await api('GET', '/api/webauthn/credentials');
+  if (!passkeys || passkeys.error) { list.innerHTML = ''; return; }
+  if (passkeys.length === 0) {
+    list.innerHTML = '<div style="font-size:13px;color:var(--muted);">No passkeys registered.</div>';
+    return;
+  }
+  list.innerHTML = passkeys.map(p => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:6px;margin-bottom:8px;">
+      <div>
+        <div style="font-size:13px;color:var(--text);">${escHtml(p.deviceName || 'Device')}</div>
+        <div style="font-size:11px;color:var(--muted);">Added ${new Date(p.createdAt).toLocaleDateString()}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="removePasskey('${escHtml(p.credentialId)}')">Remove</button>
+    </div>
+  `).join('');
+}
+
+async function addPasskeyDevice() {
+  const msg = document.getElementById('passkey-msg');
+  msg.className = ''; msg.textContent = 'Starting registration…';
+  if (!window.PublicKeyCredential) {
+    msg.className = 'error-msg'; msg.textContent = 'This browser does not support passkeys'; return;
+  }
+  try {
+    const opts = await api('POST', '/api/webauthn/add-device/start', {});
+    if (opts.error) { msg.className = 'error-msg'; msg.textContent = opts.error; return; }
+    const cred     = await navigator.credentials.create({ publicKey: decodeRegistrationOptions(opts) });
+    const response = encodeRegistrationResponse(cred);
+    const result   = await api('POST', '/api/webauthn/add-device/finish', response);
+    if (result.error) { msg.className = 'error-msg'; msg.textContent = result.error; return; }
+    msg.className = 'success-msg'; msg.textContent = 'Device registered!';
+    loginHasPasskeys = true;
+    await loadPasskeyList();
+  } catch (e) {
+    if (e.name === 'NotAllowedError') { msg.className = 'error-msg'; msg.textContent = 'Registration cancelled'; return; }
+    msg.className = 'error-msg'; msg.textContent = 'Registration failed';
+    console.error(e);
+  }
+}
+
+async function removePasskey(credentialId) {
+  const msg = document.getElementById('passkey-msg');
+  msg.className = ''; msg.textContent = '';
+  const result = await api('DELETE', `/api/webauthn/credentials/${encodeURIComponent(credentialId)}`);
+  if (result.error) { msg.className = 'error-msg'; msg.textContent = result.error; return; }
+  await loadPasskeyList();
 }
 
 // ═══════════════════════════════════════════════════════════
