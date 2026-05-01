@@ -16,13 +16,13 @@ afterAll(() => fs.rmSync(DATA_DIR, { recursive: true, force: true }));
 
 // ─── generateSecret ───────────────────────────────────────────────────────────
 describe("generateSecret", () => {
-  test("returns a 16-character string", () => {
-    expect(generateSecret()).toHaveLength(16);
+  test("returns a 32-character string", () => {
+    expect(generateSecret()).toHaveLength(32);
   });
 
   test("only contains valid base32 characters", () => {
     const secret = generateSecret();
-    expect(secret).toMatch(/^[A-Z2-7]{16}$/);
+    expect(secret).toMatch(/^[A-Z2-7]{32}$/);
   });
 
   test("produces different values each call", () => {
