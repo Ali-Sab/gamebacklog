@@ -13,6 +13,8 @@ No Anthropic API key is required. You connect Claude.ai to the app via its MCP c
 
 ## Option A: Raspberry Pi / Debian Server (recommended)
 
+# Data storage (SQLite database `gamebacklog.db` in `/data`)
+
 This is the primary deployment target: Raspberry Pi 4, Raspberry Pi OS Lite 64-bit, Node.js 20.x, systemd service, Nginx + Certbot for HTTPS.
 
 ### 1. Install Node.js 20.x

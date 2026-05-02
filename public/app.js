@@ -452,6 +452,7 @@ const RISK_COLORS_LIGHT = { low:'#1a6b40', medium:'#7a5800', high:'#b02020' };
 const TYPE_COLORS = { game_move:'#7dd3fc', profile_update:'#f9a8d4', new_game:'#86efac', reorder:'#c4b5fd', game_edit:'#fde68a' };
 const TYPE_COLORS_LIGHT = { game_move:'#1565a8', profile_update:'#a0237a', new_game:'#1a6b40', reorder:'#5032b0', game_edit:'#7a5800' };
 const CAT_LABELS  = { inbox:'Inbox', queue:'Play Queue', caveats:'With Caveats', decompression:'Decompression', yourCall:'Your Call', played:'Played' };
+const CAT_COLORS = { inbox:'#c4b5fd', queue:'#7eb8d4', caveats:'#e8c547', decompression:'#b8d47e', yourCall:'#e8a87c', played:'#a8a8a8' };
 
 function renderAll() {
   updateMeta();

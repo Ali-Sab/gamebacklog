@@ -5,6 +5,7 @@ A personal game library and taste profile manager with Claude AI integration. Cu
 ## Features
 
 - **Game library** — Organize games into five categories: Play Queue, With Caveats, Decompression, Your Call, and Played
+  * Note: Internally, the system also uses an `inbox` bucket for games that have been added but not yet triaged, and a `skip` value used internally for bulk re‑ordering.
 - **Filtering** — Search by title, filter by mode (9 types) and risk level
 - **Taste profile** — Editable profile text Claude uses as context when evaluating your library
 - **Claude integration** — Connect Claude.ai via MCP; Claude can read your library and suggest moves, new games, or profile updates
