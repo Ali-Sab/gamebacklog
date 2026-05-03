@@ -12,6 +12,9 @@ const cookieParser = require("cookie-parser");
 const rateLimit   = require("express-rate-limit");
 const QRCode      = require("qrcode");
 const { generateSync: _otpGenerate, verifySync: _otpVerify, generateSecret: _otpSecret } = require("otplib");
+const { createGuardrails: _createGuardrails } = require("@otplib/core");
+// Relax minimum secret length — existing secrets may be 10 bytes (pre-v13 default).
+const _otpGuardrails = { ..._createGuardrails(), MIN_SECRET_BYTES: 0 };
 const { doubleCsrf }    = require("csrf-csrf");
 const { createMcpRouter } = require("./mcp-server");
 const { db, readJSON, writeJSON, findGameById, insertGame, updateGame, deleteGameById, writePasskeyCredential, deletePasskeyCredential } = require("./db");
@@ -85,13 +88,13 @@ function hashPassword(password, salt) {
 // TOTP via otplib (RFC 6238). 30s step, ±1 window for clock drift.
 function computeTOTP(secret, offset = 0) {
   const epoch = Math.floor(Date.now() / 1000) + offset * 30;
-  return _otpGenerate({ secret, epoch });
+  return _otpGenerate({ secret, epoch, guardrails: _otpGuardrails });
 }
 
 function verifyTOTP(secret, code) {
   const c = (code || "").replace(/\s/g, "");
   if (c.length !== 6) return false;
-  return _otpVerify({ secret, token: c, epochTolerance: 30 }).valid;
+  return _otpVerify({ secret, token: c, epochTolerance: 30, guardrails: _otpGuardrails }).valid;
 }
 
 function generateSecret() {
