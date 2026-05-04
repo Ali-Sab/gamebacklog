@@ -3,7 +3,7 @@
 // ─── Load env ───────────────────────────────────────────────────────────────
 const path = require("path");
 // dotenv is no-overwrite by default — tests can still inject env vars before require
-require("dotenv").config({ path: path.join(__dirname, ".env") });
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
 const express     = require("express");
 const crypto      = require("crypto");
@@ -27,6 +27,7 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-in-production";
 const MCP_TOKEN  = process.env.MCP_TOKEN  || "";
 const IS_PROD          = process.env.NODE_ENV === "production";
+const SERVE_STATIC     = process.env.NODE_ENV !== "development";
 const WEBAUTHN_RP_ID   = process.env.WEBAUTHN_RP_ID   || "localhost";
 const WEBAUTHN_RP_NAME = process.env.WEBAUTHN_RP_NAME || "Game Backlog";
 
@@ -45,7 +46,11 @@ function getOrigin(req) {
 // ─── Middleware ──────────────────────────────────────────────────────────────
 app.use(express.json({ limit: "2mb" }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, "public")));
+
+// In production, serve the Vite build output. In dev, Vite runs its own server.
+if (SERVE_STATIC) {
+  app.use(express.static(path.join(__dirname, "..", "dist")));
+}
 
 // CORS — only needed if frontend is on a different origin
 app.use((req, res, next) => {
@@ -822,9 +827,11 @@ app.use(mcpPath(), (req, res, next) => {
 app.use(mcpPath(), createMcpRouter({ readJSON, writeJSON }));
 
 // ─── SPA fallback (never matches /api or /mcp) ───────────────────────────────
-app.get(/^(?!\/(api|mcp))/, (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+if (SERVE_STATIC) {
+  app.get(/^(?!\/(api|mcp))/, (req, res) => {
+    res.sendFile(path.join(__dirname, "..", "dist", "index.html"));
+  });
+}
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 if (require.main === module) {

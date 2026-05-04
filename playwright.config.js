@@ -24,7 +24,7 @@ module.exports = defineConfig({
   ],
 
   webServer: {
-    command:          "node test/e2e/server.js",
+    command:          "NODE_ENV=production node test/e2e/server.js",
     port:             PORT,
     reuseExistingServer: false,
     timeout:          15000,

@@ -2,13 +2,18 @@
   "name": "game-backlog",
   "version": "1.0.0",
   "description": "Personal game backlog with Claude integration",
-  "main": "server.js",
+  "main": "server/server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
+    "start": "node server/server.js",
+    "dev:server": "node --watch server/server.js",
+    "dev:client": "vite",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "build": "vite build",
+    "preview": "vite preview",
     "test": "jest --runInBand --forceExit",
-    "setup-cron": "bash scripts/setup-cron.sh",
-    "test:e2e": "playwright test"
+    "pretest:e2e": "vite build",
+    "test:e2e": "playwright test",
+    "setup-cron": "bash scripts/setup-cron.sh"
   },
   "jest": {
     "testEnvironment": "node",
@@ -32,14 +37,22 @@
     "express-rate-limit": "^7.4.1",
     "jsonwebtoken": "^9.0.2",
     "otplib": "^13.4.0",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "concurrently": "^9.2.1",
     "jest": "^30.3.0",
-    "supertest": "^7.2.2"
+    "supertest": "^7.2.2",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.10"
   }
 }

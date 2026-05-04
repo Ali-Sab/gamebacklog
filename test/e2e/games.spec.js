@@ -2,22 +2,31 @@
 
 const { test, expect } = require("@playwright/test");
 
+const GAME_DEFAULTS = { platform: "pc", input: "kbm" };
+
+function withDefaults(list) {
+  return list.map((g) => ({ ...GAME_DEFAULTS, ...g }));
+}
+
 async function seedGames(page, games) {
   const res = await page.request.post("/api/auth/refresh");
   const { accessToken } = await res.json();
+  const normalized = Object.fromEntries(
+    Object.entries(games).map(([cat, list]) => [cat, withDefaults(list)])
+  );
   await page.request.post("/api/data", {
     headers: { Authorization: `Bearer ${accessToken}` },
-    data: { games },
+    data: { games: normalized },
   });
 }
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  await page.waitForSelector("#screen-main:not(.hidden)");
+  await page.waitForSelector('[data-testid="screen-main"]');
 });
 
 test("games tab is visible and active by default", async ({ page }) => {
-  await expect(page.locator("#tab-games")).toHaveClass(/active/);
+  await expect(page.locator('[data-testid="tab-games"]')).toBeVisible();
   await expect(page.locator(".cat-tabs")).toBeVisible();
 });
 
@@ -34,17 +43,41 @@ test("Add Game button puts the game in the Inbox", async ({ page }) => {
     queue: [], caveats: [], decompression: [], yourCall: [], played: []
   });
   await page.reload();
-  await page.waitForSelector("#screen-main:not(.hidden)");
+  await page.waitForSelector('[data-testid="screen-main"]');
 
-  await page.click("button:has-text('+ Add Game')");
+  await page.click('[data-testid="add-game-btn"]');
   await expect(page.locator(".modal")).toBeVisible();
-  await page.fill("#gm-title", "User Added Game");
+  await page.fill('[data-testid="gm-title"]', "User Added Game");
   await page.fill("#gm-hours", "5");
-  await page.click("#gm-save");
+  await page.getByLabel("Platform").selectOption("pc");
+  await page.getByLabel("Input").selectOption("kbm");
+  await page.click('[data-testid="gm-save"]');
   await expect(page.locator(".modal")).toHaveCount(0);
 
   await page.click(".cat-btn[data-cat='inbox']");
   await expect(page.locator(".game-title:has-text('User Added Game')")).toBeVisible();
+});
+
+test("Add Game modal requires platform and input before saving", async ({ page }) => {
+  await page.click('[data-testid="add-game-btn"]');
+  await expect(page.locator(".modal")).toBeVisible();
+  await page.fill('[data-testid="gm-title"]', "Validation Test Game");
+
+  // Save with neither platform nor input selected — expect error
+  await page.click('[data-testid="gm-save"]');
+  await expect(page.locator('[data-testid="gm-error"]')).toBeVisible();
+  await expect(page.locator(".modal")).toBeVisible();
+
+  // Fill platform only — still blocked
+  await page.getByLabel("Platform").selectOption("pc");
+  await page.click('[data-testid="gm-save"]');
+  await expect(page.locator('[data-testid="gm-error"]')).toBeVisible();
+  await expect(page.locator(".modal")).toBeVisible();
+
+  // Fill input too — should succeed now
+  await page.getByLabel("Input").selectOption("kbm");
+  await page.click('[data-testid="gm-save"]');
+  await expect(page.locator(".modal")).toHaveCount(0);
 });
 
 test("Inbox tab hides rank column and move-to dropdown", async ({ page }) => {
@@ -53,7 +86,7 @@ test("Inbox tab hides rank column and move-to dropdown", async ({ page }) => {
     queue: [], caveats: [], decompression: [], yourCall: [], played: []
   });
   await page.reload();
-  await page.waitForSelector("#screen-main:not(.hidden)");
+  await page.waitForSelector('[data-testid="screen-main"]');
   await page.click(".cat-btn[data-cat='inbox']");
 
   await expect(page.locator(".game-title:has-text('Inbox Only')")).toBeVisible();
@@ -74,13 +107,13 @@ test("Edit button opens prefilled modal and saves changes", async ({ page }) => 
     caveats: [], decompression: [], yourCall: [], played: []
   });
   await page.reload();
-  await page.waitForSelector("#screen-main:not(.hidden)");
+  await page.waitForSelector('[data-testid="screen-main"]');
 
   await page.locator(".game-row:has-text('Editable Game') .row-edit-btn").click();
-  await expect(page.locator("#gm-title")).toHaveValue("Editable Game");
+  await expect(page.locator('[data-testid="gm-title"]')).toHaveValue("Editable Game");
   await expect(page.locator("#gm-hours")).toHaveValue("10");
   await page.fill("#gm-hours", "25");
-  await page.click("#gm-save");
+  await page.click('[data-testid="gm-save"]');
   await expect(page.locator(".modal")).toHaveCount(0);
 
   await expect(page.locator(".game-row:has-text('Editable Game') .game-hours")).toContainText("25h");
@@ -93,17 +126,17 @@ test("Delete button removes the game after confirmation", async ({ page }) => {
     caveats: [], decompression: [], yourCall: [], played: []
   });
   await page.reload();
-  await page.waitForSelector("#screen-main:not(.hidden)");
+  await page.waitForSelector('[data-testid="screen-main"]');
 
   await page.locator(".game-row:has-text('Doomed Game') .row-delete-btn").click();
   await expect(page.locator(".modal-title:has-text('Delete game')")).toBeVisible();
-  await page.click("#confirm-delete-btn");
+  await page.click('[data-testid="confirm-delete-btn"]');
   await expect(page.locator(".game-title:has-text('Doomed Game')")).toHaveCount(0);
 });
 
 test("game table renders after switching categories", async ({ page }) => {
   await page.click(".cat-btn[data-cat='played']");
-  await expect(page.locator("#game-table")).toBeVisible();
+  await expect(page.locator(".game-table")).toBeVisible();
 });
 
 test("search filters games by title", async ({ page }) => {
@@ -115,9 +148,9 @@ test("search filters games by title", async ({ page }) => {
     caveats: [], decompression: [], yourCall: [], played: []
   });
   await page.reload();
-  await page.waitForSelector("#screen-main:not(.hidden)");
+  await page.waitForSelector('[data-testid="screen-main"]');
 
-  await page.fill("#game-search", "hollow");
+  await page.fill("#global-search", "hollow");
   await expect(page.locator(".game-title:has-text('Hollow Knight')")).toBeVisible();
   await expect(page.locator(".game-title:has-text('SOMA')")).toHaveCount(0);
 });
@@ -142,7 +175,7 @@ test("switching to played category shows no mark-played button", async ({ page }
     played: [{ id: "e2e-p1", title: "Finished Game", mode: "action", risk: "", hours: "20", note: "", playedDate: "1/1/2025" }]
   });
   await page.reload();
-  await page.waitForSelector("#screen-main:not(.hidden)");
+  await page.waitForSelector('[data-testid="screen-main"]');
   await page.click(".cat-btn[data-cat='played']");
   await expect(page.locator(".action-played")).toHaveCount(0);
 });

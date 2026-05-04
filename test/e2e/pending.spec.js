@@ -5,12 +5,12 @@ const { DATA_DIR } = require("./constants");
 
 // Open a direct SQLite connection to the test DB for seeding/clearing state
 process.env.DATA_DIR = DATA_DIR;
-const { readJSON, writeJSON } = require("../../db");
+const { readJSON, writeJSON } = require("../../server/db");
 
 async function injectPending(page, item) {
   const existing = readJSON("pending.json", []);
   writeJSON("pending.json", [...existing, item]);
-  await page.evaluate(() => typeof loadPending === "function" && loadPending());
+  await page.click("#refresh-pending-btn");
   await page.waitForTimeout(300);
 }
 
@@ -18,19 +18,19 @@ test.beforeEach(async ({ page }) => {
   writeJSON("pending.json", []);
 
   await page.goto("/");
-  await page.waitForSelector("#screen-main:not(.hidden)");
+  await page.waitForSelector('[data-testid="screen-main"]');
   await page.click("button[data-tab='pending']");
-  await expect(page.locator("#tab-pending")).toHaveClass(/active/);
+  await expect(page.locator('[data-testid="tab-pending"]')).toBeVisible();
 });
 
 test("pending tab shows empty state when queue is empty", async ({ page }) => {
-  await page.click("button:has-text('Refresh')");
+  await page.click("#refresh-pending-btn");
   await page.waitForTimeout(300);
   await expect(page.locator("#pending-list .empty-pending")).toBeVisible();
 });
 
 test("pending badge is hidden when queue is empty", async ({ page }) => {
-  await expect(page.locator("#pending-badge")).toHaveClass(/hidden/);
+  await expect(page.locator("#pending-badge")).toHaveCount(0);
 });
 
 test("pending badge appears when there is a pending item", async ({ page }) => {
@@ -43,10 +43,7 @@ test("pending badge appears when there is a pending item", async ({ page }) => {
     data: { title: "Test Game", fromCategory: "queue", toCategory: "played" }
   });
 
-  // Trigger poll
-  await page.evaluate(() => typeof loadPending === "function" && loadPending());
-  await page.waitForTimeout(500);
-  await expect(page.locator("#pending-badge")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#pending-badge")).toBeVisible();
 });
 
 test("pending card is rendered for a game_move suggestion", async ({ page }) => {
@@ -58,9 +55,6 @@ test("pending card is rendered for a game_move suggestion", async ({ page }) => 
     reason: "Already finished it",
     data: { title: "Hollow Knight", fromCategory: "queue", toCategory: "played" }
   });
-
-  await page.evaluate(() => typeof loadPending === "function" && loadPending());
-  await page.waitForTimeout(500);
 
   await expect(page.locator("#pending-list")).toContainText("Hollow Knight");
   await expect(page.locator("#pending-list")).toContainText("Game Move");
@@ -90,9 +84,6 @@ test("approve button calls approve endpoint and removes card", async ({ page }) 
     data: { title: "Hollow Knight", fromCategory: "queue", toCategory: "played" }
   });
 
-  await page.evaluate(() => typeof loadPending === "function" && loadPending());
-  await page.waitForTimeout(500);
-
   await page.locator(".pending-card button:has-text('Approve')").click();
   await page.waitForTimeout(500);
 
@@ -110,9 +101,6 @@ test("reject button removes the pending card", async ({ page }) => {
     data: { title: "Disco Elysium", category: "queue", mode: "detective", risk: "", hours: "30", note: "" }
   });
 
-  await page.evaluate(() => typeof loadPending === "function" && loadPending());
-  await page.waitForTimeout(500);
-
   await page.click("button:has-text('Reject')");
   await page.waitForTimeout(500);
 
@@ -129,8 +117,6 @@ test("history toggle shows rejected items", async ({ page }) => {
     data: { section: "SESSION LENGTH", change: "Prefers short sessions." }
   });
 
-  await page.evaluate(() => typeof loadPending === "function" && loadPending());
-  await page.waitForTimeout(500);
   await page.click("button:has-text('Reject')");
   await page.waitForTimeout(500);
 
@@ -160,9 +146,6 @@ test("two suggestions for the same game show only one card", async ({ page }) =>
     data: { title: "Celeste", fromCategory: "queue", toCategory: "played" }
   });
 
-  await page.evaluate(() => typeof loadPending === "function" && loadPending());
-  await page.waitForTimeout(500);
-
   // Two raw entries exist in the file, but the MCP dedup layer means this
   // won't happen in practice — verify the count either way
   const cards = page.locator("#pending-list .pending-card");
@@ -178,10 +161,10 @@ test("two suggestions for the same game show only one card", async ({ page }) =>
 });
 
 test("approve-all button is hidden when queue is empty, visible whenever at least one item is pending", async ({ page }) => {
-  // Empty queue — button should be hidden
-  await page.evaluate(() => typeof loadPending === "function" && loadPending());
+  // Empty queue — button should not exist
+  await page.click("#refresh-pending-btn");
   await page.waitForTimeout(300);
-  await expect(page.locator("#approve-all-btn")).toBeHidden();
+  await expect(page.locator("#approve-all-btn")).toHaveCount(0);
 
   // Single item — should appear
   await injectPending(page, {
@@ -192,8 +175,6 @@ test("approve-all button is hidden when queue is empty, visible whenever at leas
     reason: "single",
     data: { title: "Solo", fromCategory: "queue", toCategory: "played" }
   });
-  await page.evaluate(() => typeof loadPending === "function" && loadPending());
-  await page.waitForTimeout(500);
   await expect(page.locator("#approve-all-btn")).toBeVisible();
 
   // Add a second item — still visible
@@ -205,8 +186,6 @@ test("approve-all button is hidden when queue is empty, visible whenever at leas
     reason: "second",
     data: { title: "Plus One", category: "decompression", mode: "puzzle", risk: "", hours: "3", note: "" }
   });
-  await page.evaluate(() => typeof loadPending === "function" && loadPending());
-  await page.waitForTimeout(500);
   await expect(page.locator("#approve-all-btn")).toBeVisible();
 });
 
@@ -237,9 +216,6 @@ test("approve-all button approves every pending item in one click", async ({ pag
     id: "aa-3", type: "profile_update", status: "pending", createdAt: new Date().toISOString(),
     reason: "observed", data: { section: "EA SECTION", change: "Added by approve-all e2e." }
   });
-
-  await page.evaluate(() => typeof loadPending === "function" && loadPending());
-  await page.waitForTimeout(500);
 
   await page.click("#approve-all-btn");
   await page.waitForTimeout(800);
@@ -282,9 +258,6 @@ test("reorder card renders and approving applies new ranks", async ({ page }) =>
     data: { category: "queue", rankedTitles: ["RO Charlie", "RO Bravo", "RO Alpha"] }
   });
 
-  await page.evaluate(() => typeof loadPending === "function" && loadPending());
-  await page.waitForTimeout(500);
-
   // Card renders with type label and category
   await expect(page.locator("#pending-list")).toContainText("Reorder");
   await expect(page.locator("#pending-list")).toContainText("Play Queue");
@@ -305,7 +278,7 @@ test("reorder card renders and approving applies new ranks", async ({ page }) =>
 });
 
 test("MCP dedup: second suggestion for same game replaces first in pending.json", async ({ page }) => {
-  const { execTool } = require("../../mcp-server");
+  const { execTool } = require("../../server/mcp-server");
 
   // First suggestion
   await execTool("suggest_game_move", {
@@ -325,7 +298,7 @@ test("MCP dedup: second suggestion for same game replaces first in pending.json"
   expect(celesteItems[0].reason).toBe("Already finished");
 
   // Verify the UI shows exactly one card for Celeste
-  await page.evaluate(() => typeof loadPending === "function" && loadPending());
+  await page.click("#refresh-pending-btn");
   await page.waitForTimeout(500);
   await expect(page.locator("#pending-list")).toContainText("Celeste");
 });

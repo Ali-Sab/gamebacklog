@@ -15,13 +15,14 @@ test.beforeEach(async ({ page }) => {
   });
 
   await page.goto("/");
-  await page.waitForSelector("#screen-main:not(.hidden)");
+  await page.waitForSelector('[data-testid="screen-main"]');
   await page.click("button[data-tab='profile']");
-  await expect(page.locator("#tab-profile")).toHaveClass(/active/);
+  await expect(page.locator('[data-testid="tab-profile"]')).toBeVisible();
 });
 
 test("profile tab renders profile content", async ({ page }) => {
-  await expect(page.locator("#profile-content")).toBeVisible();
+  await expect(page.locator('[data-testid="tab-profile"]')).toBeVisible();
+  await expect(page.locator(".profile-section-card").first()).toBeVisible();
 });
 
 test("edit profile button is present on each section", async ({ page }) => {
@@ -53,11 +54,11 @@ test("can edit and save a section", async ({ page }) => {
   await expect(page.locator(".profile-text-textarea")).toHaveCount(0);
 
   // Content should be visible
-  await expect(page.locator("#profile-content")).toContainText("Updated section content for E2E test");
+  await expect(page.locator('[data-testid="tab-profile"]')).toContainText("Updated section content for E2E test");
 
   // Reload and verify persistence
   await page.reload();
-  await page.waitForSelector("#screen-main:not(.hidden)");
+  await page.waitForSelector('[data-testid="screen-main"]');
   await page.click("button[data-tab='profile']");
-  await expect(page.locator("#profile-content")).toContainText("Updated section content for E2E test");
+  await expect(page.locator('[data-testid="tab-profile"]')).toContainText("Updated section content for E2E test");
 });

@@ -18,7 +18,7 @@ module.exports = async function globalSetup() {
   // Open a second SQLite connection to the same file and write credentials.
   // WAL mode allows concurrent readers/writers so the server process sees the write.
   process.env.DATA_DIR = DATA_DIR;
-  const { writeJSON } = require("../../db");
+  const { writeJSON } = require("../../server/db");
 
   const salt = crypto.randomBytes(16).toString("hex");
   const hash = await hashPassword(PASSWORD, salt);
@@ -31,22 +31,22 @@ module.exports = async function globalSetup() {
 
   await page.goto(`http://localhost:${PORT}`);
 
-  await page.waitForSelector("#screen-login:not(.hidden)", { timeout: 10000 });
-  await page.fill("#login-username", USERNAME);
-  await page.fill("#login-password", PASSWORD);
-  await page.click("#login-step1 .btn-gold");
+  await page.waitForSelector('[data-testid="screen-login"]', { timeout: 10000 });
+  await page.fill('[data-testid="login-username"]', USERNAME);
+  await page.fill('[data-testid="login-password"]', PASSWORD);
+  await page.click('[data-testid="login-submit-step1"]');
 
-  await page.waitForSelector("#login-totp");
-  await page.fill("#login-totp", computeTOTP(TOTP_SECRET));
-  await page.click("text=Verify & Sign In");
+  await page.waitForSelector('[data-testid="login-totp"]');
+  await page.fill('[data-testid="login-totp"]', computeTOTP(TOTP_SECRET));
+  await page.click('button:has-text("Verify")');
 
-  const err = page.locator("#login-error2:not(.hidden)");
+  const err = page.locator('[data-testid="login-error2"]');
   if (await err.isVisible({ timeout: 1500 }).catch(() => false)) {
-    await page.fill("#login-totp", computeTOTP(TOTP_SECRET, 1));
-    await page.click("text=Verify & Sign In");
+    await page.fill('[data-testid="login-totp"]', computeTOTP(TOTP_SECRET, 1));
+    await page.click('button:has-text("Verify")');
   }
 
-  await page.waitForSelector("#screen-main:not(.hidden)", { timeout: 10000 });
+  await page.waitForSelector('[data-testid="screen-main"]', { timeout: 10000 });
 
   await context.storageState({ path: AUTH_STATE_FILE });
   await browser.close();
