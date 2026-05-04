@@ -51,7 +51,9 @@ if [[ ! -d "$APP_DIR/node_modules" ]]; then
   error "node_modules not found. Run: cd $APP_DIR && npm install"
 fi
 
-npm ci
+info "Building frontend..."
+cd "$APP_DIR" && npm run build
+log "Frontend built"
 
 # Find node binary
 NODE_BIN=$(which node 2>/dev/null || true)
@@ -78,7 +80,7 @@ After=network.target
 Type=simple
 User=$CURRENT_USER
 WorkingDirectory=$APP_DIR
-ExecStart=$NODE_BIN server.js
+ExecStart=$NODE_BIN server/index.js
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal
