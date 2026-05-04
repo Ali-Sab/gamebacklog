@@ -10,9 +10,9 @@ process.env.DATA_DIR   = DATA_DIR;
 process.env.JWT_SECRET = "test-jwt-secret";
 process.env.NODE_ENV   = "test";
 
-const { app, computeTOTP } = require("../server");
-const { execTool }         = require("../mcp-server");
-const { readJSON, writeJSON } = require("../db");
+const { app, computeTOTP } = require("../server/server");
+const { execTool }         = require("../server/mcp-server");
+const { readJSON, writeJSON } = require("../server/db");
 const { setupAndLogin, makeStore } = require("./helpers");
 
 let token;

@@ -1,7 +1,7 @@
 "use strict";
 
 // MCP tool unit tests — no HTTP, no disk I/O
-const { execTool } = require("../mcp-server");
+const { execTool } = require("../server/mcp-server");
 const { makeStore } = require("./helpers");
 
 // Helpers
