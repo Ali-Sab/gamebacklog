@@ -6,20 +6,23 @@ const { CallToolRequestSchema, ListToolsRequestSchema, ErrorCode, McpError } = r
 const express = require("express");
 const crypto  = require("crypto");
 const { createOrUpdate } = require("./pendingTypes");
+const { readGames, readProfile, readPending, writePending } = require("./db");
 
 // ─── Tool implementations (exported for unit testing) ─────────────────────────
 
+// readJSON/writeJSON are optional overrides — used by tests for mock injection.
+// When absent, the real db functions are used.
 function queue(type, args, reason, readJSON, writeJSON) {
-  const pending = readJSON("pending.json", []) || [];
+  const pending = readJSON ? readJSON("pending.json", []) : readPending();
   const result = createOrUpdate(type, args, reason, pending);
-  writeJSON("pending.json", pending);
+  if (writeJSON) writeJSON("pending.json", pending); else writePending(pending);
   return result;
 }
 
 async function execTool(name, args = {}, readJSON, writeJSON) {
   switch (name) {
     case "get_game_library": {
-      const games = readJSON("games.json", {}) || {};
+      const games = (readJSON ? readJSON("games.json", {}) : readGames()) || {};
       const result = {};
       for (const [cat, list] of Object.entries(games)) {
         const sorted = [...(list || [])].sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
@@ -33,7 +36,7 @@ async function execTool(name, args = {}, readJSON, writeJSON) {
     }
 
     case "get_taste_profile": {
-      const profile = readJSON("profile.json", []);
+      const profile = readJSON ? readJSON("profile.json", []) : readProfile();
       if (!Array.isArray(profile) || profile.length === 0) {
         return { content: [{ type: "text", text: "(no profile set)" }] };
       }
@@ -83,7 +86,7 @@ async function execTool(name, args = {}, readJSON, writeJSON) {
   }
 }
 
-function createMcpRouter({ readJSON, writeJSON }) {
+function createMcpRouter() {
   const router = express.Router();
   const sessions = new Map(); // sessionId -> transport
 
@@ -200,7 +203,7 @@ function createMcpRouter({ readJSON, writeJSON }) {
 
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args = {} } = request.params;
-      return execTool(name, args, readJSON, writeJSON);
+      return execTool(name, args);
     });
 
     return server;

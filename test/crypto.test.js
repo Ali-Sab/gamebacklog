@@ -10,7 +10,7 @@ process.env.DATA_DIR    = DATA_DIR;
 process.env.JWT_SECRET  = "test-jwt-secret";
 process.env.NODE_ENV    = "test";
 
-const { computeTOTP, verifyTOTP, generateSecret, hashPassword } = require("../server/server");
+const { computeTOTP, verifyTOTP, generateSecret, hashPassword } = require("../server/lib/crypto");
 
 afterAll(() => fs.rmSync(DATA_DIR, { recursive: true, force: true }));
 

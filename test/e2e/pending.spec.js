@@ -5,17 +5,17 @@ const { DATA_DIR } = require("./constants");
 
 // Open a direct SQLite connection to the test DB for seeding/clearing state
 process.env.DATA_DIR = DATA_DIR;
-const { readJSON, writeJSON } = require("../../server/db");
+const { readPending, writePending } = require("../../server/db");
 
 async function injectPending(page, item) {
-  const existing = readJSON("pending.json", []);
-  writeJSON("pending.json", [...existing, item]);
+  const existing = readPending();
+  writePending([...existing, item]);
   await page.click("#refresh-pending-btn");
   await page.waitForTimeout(300);
 }
 
 test.beforeEach(async ({ page }) => {
-  writeJSON("pending.json", []);
+  writePending([]);
 
   await page.goto("/");
   await page.waitForSelector('[data-testid="screen-main"]');
@@ -283,15 +283,15 @@ test("MCP dedup: second suggestion for same game replaces first in pending.json"
   // First suggestion
   await execTool("suggest_game_move", {
     title: "Celeste", fromCategory: "queue", toCategory: "caveats", reason: "Too hard"
-  }, readJSON, writeJSON);
+  });
 
   // Second suggestion for the same game — should replace, not append
   await execTool("suggest_game_move", {
     title: "Celeste", fromCategory: "queue", toCategory: "played", reason: "Already finished"
-  }, readJSON, writeJSON);
+  });
 
-  const pending = readJSON("pending.json", []);
-  const celesteItems = pending.filter(p => p.type === "game_move" && p.data.title === "Celeste" && p.status === "pending");
+  const pending = readPending();
+  const celesteItems = (pending || []).filter(p => p.type === "game_move" && p.data.title === "Celeste" && p.status === "pending");
 
   expect(celesteItems).toHaveLength(1);
   expect(celesteItems[0].data.toCategory).toBe("played");

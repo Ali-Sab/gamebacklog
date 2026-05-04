@@ -10,9 +10,8 @@ process.env.DATA_DIR   = DATA_DIR;
 process.env.JWT_SECRET = "test-jwt-secret";
 process.env.NODE_ENV   = "test";
 
-const { app, computeTOTP } = require("../server/server");
+const { app, computeTOTP } = require("../server/app");
 const { execTool }         = require("../server/mcp-server");
-const { readJSON, writeJSON } = require("../server/db");
 const { setupAndLogin, makeStore } = require("./helpers");
 
 let token;
@@ -89,7 +88,7 @@ describe("game_move suggestion", () => {
       fromCategory: "queue",
       toCategory: "played",
       reason: "Already finished it"
-    }, readJSON, writeJSON);
+    });
 
     const res = await request(app).get("/api/pending").set(auth());
     itemId = res.body[0]?.id;
@@ -129,7 +128,7 @@ describe("approve game_move", () => {
       fromCategory: "caveats",
       toCategory: "queue",
       reason: "Great fit actually"
-    }, readJSON, writeJSON);
+    });
 
     const res = await request(app).get("/api/pending").set(auth());
     itemId = res.body[res.body.length - 1]?.id;
@@ -165,7 +164,7 @@ describe("approve new_game", () => {
       hours: "30",
       note: "Essential detective RPG",
       reason: "Perfect taste profile fit"
-    }, readJSON, writeJSON);
+    });
 
     const res = await request(app).get("/api/pending").set(auth());
     itemId = res.body[res.body.length - 1]?.id;
@@ -187,7 +186,7 @@ describe("suggest_game_edit", () => {
       mode: "action",
       hours: "50",
       reason: "More action than atmospheric on reflection"
-    }, readJSON, writeJSON);
+    });
 
     const res = await request(app).get("/api/pending").set(auth()).expect(200);
     const item = res.body.find(p => p.type === "game_edit" && p.data.title === "Hollow Knight");
@@ -203,7 +202,7 @@ describe("suggest_game_edit", () => {
       title: "Hollow Knight",
       mode: "immersive",
       reason: "Updated take"
-    }, readJSON, writeJSON);
+    });
 
     const res = await request(app).get("/api/pending").set(auth());
     const items = res.body.filter(p => p.type === "game_edit" && p.data.title === "Hollow Knight" && p.status === "pending");
@@ -215,7 +214,7 @@ describe("suggest_game_edit", () => {
     const result = await execTool("suggest_game_edit", {
       title: "Hollow Knight",
       reason: "Nothing to change"
-    }, readJSON, writeJSON);
+    });
     expect(result.content[0].text).toMatch(/no changes/i);
   });
 });
@@ -231,7 +230,7 @@ describe("approve game_edit", () => {
       hours: "25",
       note: "Excellent loop",
       reason: "Refined after reflection"
-    }, readJSON, writeJSON);
+    });
 
     const res = await request(app).get("/api/pending").set(auth());
     itemId = res.body.find(p => p.type === "game_edit" && p.data.title === "Hades")?.id;
@@ -265,7 +264,7 @@ describe("approve profile_update", () => {
       section: "SESSION LENGTH",
       change: "Prefers sessions under 2 hours.",
       reason: "Observed from conversation"
-    }, readJSON, writeJSON);
+    });
 
     const res = await request(app).get("/api/pending").set(auth());
     itemId = res.body[res.body.length - 1]?.id;
@@ -304,7 +303,7 @@ describe("approve reorder", () => {
       // Reverse the first three; omit Delta to verify it sinks to the bottom
       rankedTitles: ["Charlie", "Bravo", "Alpha"],
       reason: "New ranking"
-    }, readJSON, writeJSON);
+    });
 
     const res = await request(app).get("/api/pending").set(auth());
     itemId = res.body.find(p => p.type === "reorder")?.id;
@@ -326,12 +325,12 @@ describe("approve reorder", () => {
       category: "queue",
       rankedTitles: ["Alpha", "Bravo"],
       reason: "first"
-    }, readJSON, writeJSON);
+    });
     await execTool("suggest_reorder", {
       category: "queue",
       rankedTitles: ["Bravo", "Alpha"],
       reason: "second"
-    }, readJSON, writeJSON);
+    });
 
     const res = await request(app).get("/api/pending").set(auth());
     const reorders = res.body.filter(p => p.type === "reorder" && p.data.category === "queue");
@@ -367,16 +366,16 @@ describe("POST /api/pending/approve-all", () => {
     // Queue four heterogeneous suggestions
     await execTool("suggest_game_move", {
       title: "Multi C", fromCategory: "caveats", toCategory: "queue", reason: "promote"
-    }, readJSON, writeJSON);
+    });
     await execTool("suggest_new_game", {
       title: "Multi D", category: "decompression", mode: "puzzle", hours: "3", reason: "fits"
-    }, readJSON, writeJSON);
+    });
     await execTool("suggest_game_edit", {
       title: "Multi A", note: "edited via approve-all", reason: "tighten"
-    }, readJSON, writeJSON);
+    });
     await execTool("suggest_profile_update", {
       section: "PACING", change: "Short sessions preferred.", reason: "observed"
-    }, readJSON, writeJSON);
+    });
   });
 
   test("approves every pending item in one call", async () => {
