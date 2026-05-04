@@ -18,11 +18,11 @@ module.exports = async function globalSetup() {
   // Open a second SQLite connection to the same file and write credentials.
   // WAL mode allows concurrent readers/writers so the server process sees the write.
   process.env.DATA_DIR = DATA_DIR;
-  const { writeJSON } = require("../../server/db");
+  const { writeCredentials } = require("../../server/db");
 
   const salt = crypto.randomBytes(16).toString("hex");
   const hash = await hashPassword(PASSWORD, salt);
-  writeJSON("credentials.json", { username: USERNAME, hash, salt, totpSecret: TOTP_SECRET });
+  writeCredentials({ username: USERNAME, hash, salt, totpSecret: TOTP_SECRET });
 
   // Browser login to capture auth storage state
   const browser = await chromium.launch();

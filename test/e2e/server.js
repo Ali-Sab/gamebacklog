@@ -13,7 +13,7 @@ process.env.JWT_SECRET = JWT_SECRET;
 process.env.DATA_DIR   = DATA_DIR;
 process.env.NODE_ENV   = "test";
 
-const { app } = require("../../server/server");
+const { app } = require("../../server/app");
 
 app.listen(PORT, () => {
   console.log(`[e2e-server] listening on ${PORT}, DATA_DIR=${DATA_DIR}`);

@@ -3,9 +3,12 @@
 const Database = require("better-sqlite3");
 const path = require("path");
 
+const fs = require("fs");
+
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "..", "data");
 const DB_PATH  = process.env.DB_PATH  || path.join(DATA_DIR, "gamebacklog.db");
 
+fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 const db = new Database(DB_PATH);
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
@@ -414,44 +417,24 @@ function writeSetupState(obj) {
   `).run(obj.username, obj.hash, obj.salt, obj.challenge, obj.createdAt);
 }
 
-// ─── readJSON / writeJSON drop-in replacements ───────────────────────────────
-
-function readJSON(file, def) {
-  try {
-    switch (file) {
-      case "games.json":         return readGames();
-      case "profile.json":       return readProfile();
-      case "pending.json":       return readPending();
-      case "credentials.json":   return readCredentials();
-      case "refresh_tokens.json": return readRefreshTokens();
-      case "pending_setup.json":         return readPendingSetup();
-      case "passkey_credentials.json":   return readPasskeyCredentials();
-      case "webauthn_challenge.json":    return readWebAuthnChallenge();
-      case "setup_state.json":           return readSetupState();
-      default: return def;
-    }
-  } catch {
-    return def;
-  }
-}
-
-function writeJSON(file, data) {
-  switch (file) {
-    case "games.json":          return writeGames(data);
-    case "profile.json":        return writeProfile(data);
-    case "pending.json":        return writePending(data);
-    case "credentials.json":    return writeCredentials(data);
-    case "refresh_tokens.json": return writeRefreshTokens(data);
-    case "pending_setup.json":        return writePendingSetup(data);
-    case "webauthn_challenge.json":   return writeWebAuthnChallenge(data);
-    case "setup_state.json":          return writeSetupState(data);
-  }
-}
-
 module.exports = {
-  db, readJSON, writeJSON,
-  // Typed per-row API
-  findGameById, insertGame, updateGame, deleteGameById,
-  // Paskeys
-  writePasskeyCredential, deletePasskeyCredential
+  db,
+  // Games
+  readGames, writeGames, findGameById, insertGame, updateGame, deleteGameById,
+  // Profile
+  readProfile, writeProfile,
+  // Pending
+  readPending, writePending,
+  // Credentials
+  readCredentials, writeCredentials,
+  // Refresh tokens
+  readRefreshTokens, writeRefreshTokens,
+  // Setup
+  readPendingSetup, writePendingSetup,
+  // Passkeys
+  readPasskeyCredentials, writePasskeyCredential, deletePasskeyCredential,
+  // WebAuthn challenge
+  readWebAuthnChallenge, writeWebAuthnChallenge,
+  // Setup state
+  readSetupState, writeSetupState,
 };
