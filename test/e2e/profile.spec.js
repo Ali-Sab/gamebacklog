@@ -14,7 +14,7 @@ test.beforeEach(async ({ page }) => {
     ]}
   });
 
-  await page.goto("/");
+  await  page.goto("./");
   await page.waitForSelector('[data-testid="screen-main"]');
   await page.click("button[data-tab='profile']");
   await expect(page.locator('[data-testid="tab-profile"]')).toBeVisible();

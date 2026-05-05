@@ -19,8 +19,12 @@ const SERVE_STATIC = process.env.NODE_ENV !== "development";
 app.use(express.json({ limit: "2mb" }));
 app.use(cookieParser());
 
+const BASE_PATH = "/gamebacklog";
+
 if (SERVE_STATIC) {
-  app.use(express.static(path.join(__dirname, "..", "dist")));
+  // Serve at both paths: /gamebacklog/... for direct access, / for when nginx strips the prefix
+  app.use(BASE_PATH, express.static(path.join(__dirname, "..", "dist")));
+  app.use("/", express.static(path.join(__dirname, "..", "dist")));
 }
 
 app.use((req, res, next) => {
@@ -30,10 +34,13 @@ app.use((req, res, next) => {
 });
 
 // ─── API routes ───────────────────────────────────────────────────────────────
-app.use("/api", require("./routes/auth"));
-app.use("/api", require("./routes/games"));
-app.use("/api", require("./routes/pending"));
-app.use("/api", require("./routes/data"));
+// Mounted at both paths: /api (nginx-stripped) and /gamebacklog/api (direct access)
+for (const prefix of ["/api", `${BASE_PATH}/api`]) {
+  app.use(prefix, require("./routes/auth"));
+  app.use(prefix, require("./routes/games"));
+  app.use(prefix, require("./routes/pending"));
+  app.use(prefix, require("./routes/data"));
+}
 
 // ─── MCP server ───────────────────────────────────────────────────────────────
 function mcpPath(sub = "") { return MCP_TOKEN ? `/mcp/${MCP_TOKEN}${sub}` : `/mcp${sub}`; }
@@ -52,9 +59,9 @@ app.use(mcpPath(), (req, res, next) => {
 });
 app.use(mcpPath(), createMcpRouter());
 
-// ─── SPA fallback (never matches /api or /mcp) ───────────────────────────────
+// ─── SPA fallback ────────────────────────────────────────────────────────────
 if (SERVE_STATIC) {
-  app.get(/^(?!\/(api|mcp))/, (req, res) => {
+  app.get(new RegExp(`^(${BASE_PATH})?(/(?!(api|mcp)).*)?$`), (req, res) => {
     res.sendFile(path.join(__dirname, "..", "dist", "index.html"));
   });
 }

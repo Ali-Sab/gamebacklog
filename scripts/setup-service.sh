@@ -46,6 +46,8 @@ if [[ ! -f "$ENV_FILE" ]]; then
   nano $APP_DIR/.env"
 fi
 
+cd $APP_DIR && npm ci
+
 # Verify node_modules exists
 if [[ ! -d "$APP_DIR/node_modules" ]]; then
   error "node_modules not found. Run: cd $APP_DIR && npm install"

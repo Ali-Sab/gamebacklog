@@ -17,7 +17,7 @@ async function injectPending(page, item) {
 test.beforeEach(async ({ page }) => {
   writePending([]);
 
-  await page.goto("/");
+  await  page.goto("./");
   await page.waitForSelector('[data-testid="screen-main"]');
   await page.click("button[data-tab='pending']");
   await expect(page.locator('[data-testid="tab-pending"]')).toBeVisible();

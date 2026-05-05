@@ -29,7 +29,7 @@ module.exports = async function globalSetup() {
   const context = await browser.newContext();
   const page    = await context.newPage();
 
-  await page.goto(`http://localhost:${PORT}`);
+  await page.goto(`http://localhost:${PORT}/gamebacklog`);
 
   await page.waitForSelector('[data-testid="screen-login"]', { timeout: 10000 });
   await page.fill('[data-testid="login-username"]', USERNAME);

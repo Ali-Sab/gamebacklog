@@ -21,7 +21,7 @@ async function seedGames(page, games) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await  page.goto("./");
   await page.waitForSelector('[data-testid="screen-main"]');
 });
 

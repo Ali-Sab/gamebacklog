@@ -14,7 +14,7 @@ module.exports = defineConfig({
   globalTeardown: "./test/e2e/global-teardown.js",
 
   use: {
-    baseURL:     `http://localhost:${PORT}`,
+    baseURL:     `http://localhost:${PORT}/gamebacklog/`,
     storageState: AUTH_STATE_FILE,
     trace:       "on-first-retry",
   },

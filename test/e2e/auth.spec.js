@@ -8,13 +8,13 @@ const { computeTOTP } = require("./totp");
 test.use({ storageState: { cookies: [], origins: [] } });
 
 test("redirects to login on first load", async ({ page }) => {
-  await page.goto(`http://localhost:${PORT}`);
+  await page.goto(`http://localhost:${PORT}/gamebacklog`);
   await expect(page.locator('[data-testid="screen-login"]')).toBeVisible();
   await expect(page.locator('[data-testid="screen-main"]')).toHaveCount(0);
 });
 
 test("shows error for wrong password", async ({ page }) => {
-  await page.goto(`http://localhost:${PORT}`);
+  await page.goto(`http://localhost:${PORT}/gamebacklog`);
   await page.waitForSelector('[data-testid="screen-login"]');
   await page.fill('[data-testid="login-username"]', USERNAME);
   await page.fill('[data-testid="login-password"]', "wrongpassword");
@@ -23,7 +23,7 @@ test("shows error for wrong password", async ({ page }) => {
 });
 
 test("shows TOTP step after valid credentials", async ({ page }) => {
-  await page.goto(`http://localhost:${PORT}`);
+  await page.goto(`http://localhost:${PORT}/gamebacklog`);
   await page.waitForSelector('[data-testid="screen-login"]');
   await page.fill('[data-testid="login-username"]', USERNAME);
   await page.fill('[data-testid="login-password"]', PASSWORD);
@@ -33,7 +33,7 @@ test("shows TOTP step after valid credentials", async ({ page }) => {
 });
 
 test("shows error for wrong TOTP code", async ({ page }) => {
-  await page.goto(`http://localhost:${PORT}`);
+  await page.goto(`http://localhost:${PORT}/gamebacklog`);
   await page.waitForSelector('[data-testid="screen-login"]');
   await page.fill('[data-testid="login-username"]', USERNAME);
   await page.fill('[data-testid="login-password"]', PASSWORD);
@@ -45,7 +45,7 @@ test("shows error for wrong TOTP code", async ({ page }) => {
 });
 
 test("full login flow lands on main app", async ({ page }) => {
-  await page.goto(`http://localhost:${PORT}`);
+  await page.goto(`http://localhost:${PORT}/gamebacklog`);
   await page.waitForSelector('[data-testid="screen-login"]');
   await page.fill('[data-testid="login-username"]', USERNAME);
   await page.fill('[data-testid="login-password"]', PASSWORD);
@@ -68,7 +68,7 @@ test("full login flow lands on main app", async ({ page }) => {
 // Logout test does its own fresh login so it doesn't revoke the shared storageState token
 test.describe("authenticated logout", () => {
   test("logout clears session and shows login screen", async ({ page }) => {
-    await page.goto(`http://localhost:${PORT}`);
+    await page.goto(`http://localhost:${PORT}/gamebacklog`);
     await page.waitForSelector('[data-testid="screen-login"]');
     await page.fill('[data-testid="login-username"]', USERNAME);
     await page.fill('[data-testid="login-password"]', PASSWORD);

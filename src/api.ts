@@ -18,7 +18,9 @@ export async function api(
   if (auth && _accessToken) headers["Authorization"] = `Bearer ${_accessToken}`;
   if (_csrfToken && method !== "GET" && method !== "HEAD") headers["X-CSRF-Token"] = _csrfToken;
 
-  const res = await fetch(path, {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const url = path.startsWith("/") ? `${base}${path}` : path;
+  const res = await fetch(url, {
     method,
     headers,
     credentials: "include",

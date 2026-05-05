@@ -5,7 +5,7 @@ const { USERNAME, TOTP_SECRET } = require("./constants");
 const { computeTOTP } = require("./totp");
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await  page.goto("./");
   await page.waitForSelector('[data-testid="screen-main"]');
   await page.click("button[data-tab='settings']");
   await expect(page.locator('[data-testid="tab-settings"]')).toBeVisible();
