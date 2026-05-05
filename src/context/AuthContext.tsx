@@ -43,7 +43,8 @@ export function AuthProvider({ children, onMain }: { children: ReactNode; onMain
       } else {
         setCurrentScreen("login");
       }
-    } catch {
+    } catch (e) {
+      console.error("Boot error:", e);
       setCurrentScreen("login");
     }
   }
@@ -56,7 +57,7 @@ export function AuthProvider({ children, onMain }: { children: ReactNode; onMain
   }
 
   async function logout() {
-    await api("POST", "/api/auth/logout").catch(() => {});
+    await api("POST", "/api/auth/logout").catch((e) => console.error("Logout error:", e));
     setAccessToken(null);
     setCsrfToken(null);
     setCurrentScreen("login");

@@ -37,9 +37,13 @@ export function SettingsTab({ theme, onThemeChange }: Props) {
   // Import/export
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // MCP URL
+  const [mcpUrl, setMcpUrl] = useState("");
+
   useEffect(() => {
     loadRecoveryCount();
     loadPasskeys();
+    api("GET", "/api/mcp-url").then((data) => { if (data.url) setMcpUrl(data.url); });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadRecoveryCount() {
@@ -104,9 +108,7 @@ export function SettingsTab({ theme, onThemeChange }: Props) {
     loadPasskeys();
   }
 
-  async function handleExport() {
-    const res = await fetch("/api/export", { headers: { Authorization: `Bearer ${(await api("GET", "/api/auth/csrf")).csrfToken}` } });
-    // Simpler: open in a new tab
+  function handleExport() {
     window.open("/api/export");
   }
 
@@ -124,7 +126,6 @@ export function SettingsTab({ theme, onThemeChange }: Props) {
   }
 
   const total = Object.values(state.games).reduce((a, c) => a + (c ? c.length : 0), 0);
-  const MCP_URL = `${window.location.origin}/mcp/${(window as unknown as { __mcpToken?: string }).__mcpToken || ""}`;
 
   return (
     <div data-testid="tab-settings">
@@ -216,7 +217,7 @@ export function SettingsTab({ theme, onThemeChange }: Props) {
           Add the MCP endpoint below to Claude.ai's custom connector settings to allow Claude to read and suggest changes to your game library.
         </div>
         <div style={{ fontFamily: "var(--mono)", fontSize: 12, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, padding: "10px 14px", wordBreak: "break-all", color: "var(--sub)" }}>
-          {MCP_URL}
+          {mcpUrl || "Loading…"}
         </div>
       </div>
 

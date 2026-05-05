@@ -219,7 +219,7 @@ router.get("/auth/csrf", (req, res) => {
   res.json({ csrfToken: generateCsrfToken(req, res) });
 });
 
-router.post("/auth/refresh", doubleCsrfProtection, (req, res) => {
+router.post("/auth/refresh", authLimiter, doubleCsrfProtection, (req, res) => {
   const rt = req.cookies?.refreshToken;
   if (!rt || !validateRefreshToken(rt)) {
     return res.status(401).json({ error: "Invalid or expired refresh token" });
