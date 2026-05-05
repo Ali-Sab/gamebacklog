@@ -22,7 +22,7 @@ export function GameTable({ games, cat, theme }: Props) {
   const [deleteConfirm, setDeleteConfirm] = useState<{ game: Game; cat: string } | null>(null);
 
   const isInbox = cat === "inbox";
-  const cols = isInbox ? "1fr 54px 100px 1.6fr 110px" : "54px 1fr 54px 100px 1.6fr 110px";
+  const cols = isInbox ? "1fr 54px minmax(100px, auto) 1.6fr 110px" : "54px 1fr 54px minmax(100px, auto) 1.6fr 110px";
   const headers = isInbox ? ["Game", "Hours", "Mode", "Notes", ""] : ["#", "Game", "Hours", "Mode", "Notes", ""];
 
   async function handleMove(id: string, fromCat: string, toCat: string) {

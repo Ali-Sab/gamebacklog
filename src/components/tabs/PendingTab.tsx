@@ -42,6 +42,7 @@ export function PendingTab({ theme }: Props) {
   const [historyVisible, setHistoryVisible] = useState(false);
   const [historyItems, setHistoryItems] = useState<PendingItem[]>([]);
   const [approveAllLoading, setApproveAllLoading] = useState(false);
+  const [refreshLoading, setRefreshLoading] = useState(false);
 
   const pendingItems = state.pendingItems;
 
@@ -80,7 +81,14 @@ export function PendingTab({ theme }: Props) {
             {approveAllLoading ? "Approving…" : "Approve All"}
           </button>
         )}
-        <button id="refresh-pending-btn" className="btn btn-ghost btn-sm" onClick={loadPending}>Refresh</button>
+        <button
+          id="refresh-pending-btn"
+          className="btn btn-ghost btn-sm"
+          onClick={async () => { setRefreshLoading(true); await loadPending(); setRefreshLoading(false); }}
+          disabled={refreshLoading}
+        >
+          {refreshLoading ? "Refreshing…" : "Refresh"}
+        </button>
         <button className="btn btn-ghost btn-sm" onClick={toggleHistory} style={{ marginLeft: "auto" }}>
           {historyVisible ? "Hide History" : "Show History"}
         </button>
