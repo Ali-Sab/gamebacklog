@@ -7,8 +7,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": { target: "http://localhost:3010", changeOrigin: false },
-      "/mcp":  { target: "http://localhost:3010", changeOrigin: false },
+      "/gamebacklog/api": { target: "http://localhost:3010", changeOrigin: false },
+      "/gamebacklog/mcp": { target: "http://localhost:3010", changeOrigin: false },
     },
   },
   build: {

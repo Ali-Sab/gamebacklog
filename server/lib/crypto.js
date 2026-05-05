@@ -10,6 +10,10 @@ const _otpGuardrails = { ..._createGuardrails(), MIN_SECRET_BYTES: 0 };
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-in-production";
 
+if (process.env.NODE_ENV === "production" && JWT_SECRET === "dev-secret-change-in-production") {
+  throw new Error("JWT_SECRET must be set in production — generate with: node -e \"console.log(require('crypto').randomBytes(64).toString('hex'))\"");
+}
+
 function hashPassword(password, salt) {
   return new Promise((res, rej) =>
     crypto.pbkdf2(password, salt, 310000, 64, "sha512",

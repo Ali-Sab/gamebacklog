@@ -59,7 +59,7 @@ export function GameRow({ game, index, cat, cols, theme, isInbox, onMove, onPlay
       <div>
         <div className="game-title">
           {game.title}
-          {game.url && (
+          {game.url && /^https?:\/\//i.test(game.url) && (
             <a className="game-link" href={game.url} target="_blank" rel="noopener noreferrer" title={game.url}>↗</a>
           )}
         </div>
@@ -119,11 +119,11 @@ export function GameRow({ game, index, cat, cols, theme, isInbox, onMove, onPlay
         )}
         {!isInbox && (
           <select
-            defaultValue={cat}
-            onChange={(e) => { onMove(game.id, cat, e.target.value); e.currentTarget.value = cat; }}
+            value={cat}
+            onChange={(e) => onMove(game.id, cat, e.target.value)}
           >
-            {MOVE_CATS.filter((c) => c !== "played" && c !== "inbox").map((c) => (
-              <option key={c} value={c} selected={c === cat}>{CAT_LABELS[c]}</option>
+            {MOVE_CATS.map((c) => (
+              <option key={c} value={c}>{CAT_LABELS[c]}</option>
             ))}
           </select>
         )}

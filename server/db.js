@@ -5,8 +5,8 @@ const path = require("path");
 
 const fs = require("fs");
 
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "..", "data");
-const DB_PATH  = process.env.DB_PATH  || path.join(DATA_DIR, "gamebacklog.db");
+const DATA_DIR = process.env.DATA_DIR || path.resolve(__dirname, "..", "data");
+const DB_PATH  = process.env.DB_PATH  || path.resolve(DATA_DIR, "gamebacklog.db");
 
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 const db = new Database(DB_PATH);
@@ -97,6 +97,12 @@ db.exec(`
     challenge   TEXT,
     created_at  INTEGER NOT NULL
   );
+`);
+
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_games_category ON games(category);
+  CREATE INDEX IF NOT EXISTS idx_pending_status ON pending(status);
+  CREATE INDEX IF NOT EXISTS idx_pending_type ON pending(type);
 `);
 
 // ─── Games ────────────────────────────────────────────────────────────────────
