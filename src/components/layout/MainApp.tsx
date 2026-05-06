@@ -8,6 +8,13 @@ import { useApp } from "../../context/AppContext";
 
 type Tab = "games" | "profile" | "pending" | "settings";
 
+const TAB_ICONS: Record<Tab, string> = {
+  games: "◉",
+  profile: "◎",
+  pending: "◈",
+  settings: "⚙",
+};
+
 interface Props {
   theme: string;
   onThemeChange: (t: string) => void;
@@ -15,7 +22,8 @@ interface Props {
 
 export function MainApp({ theme, onThemeChange }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("games");
-  const { loadPending } = useApp();
+  const { state, loadPending } = useApp();
+  const pendingCount = state.pendingItems.length;
 
   // Poll pending every 30s while logged in
   useEffect(() => {
@@ -32,6 +40,21 @@ export function MainApp({ theme, onThemeChange }: Props) {
         {activeTab === "pending" && <PendingTab theme={theme} />}
         {activeTab === "settings" && <SettingsTab theme={theme} onThemeChange={onThemeChange} />}
       </div>
+      <nav className="bottom-nav">
+        {(["games", "profile", "pending", "settings"] as Tab[]).map((t) => (
+          <button
+            key={t}
+            className={`bottom-nav-btn${activeTab === t ? " active" : ""}`}
+            onClick={() => setActiveTab(t)}
+          >
+            <span className="bottom-nav-icon">{TAB_ICONS[t]}</span>
+            <span>{t.charAt(0).toUpperCase() + t.slice(1)}</span>
+            {t === "pending" && pendingCount > 0 && (
+              <span className="pending-badge" style={{ position: "absolute", top: 6, right: "calc(50% - 18px)" }}>{pendingCount}</span>
+            )}
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
