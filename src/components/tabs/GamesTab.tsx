@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useApp, type Game, type Games } from "../../context/AppContext";
 import { GameTable } from "../games/GameTable";
 import { GameFilters } from "../games/GameFilters";
@@ -52,6 +52,26 @@ export function GamesTab({ theme }: Props) {
   const { showToast } = useToast();
   const [addOpen, setAddOpen] = useState(false);
   const { games, activeCat, modeFilter, riskFilter, sortBy, globalSearch } = state;
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateScrollState = useCallback(() => {
+    const el = tabsRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    const el = tabsRef.current;
+    if (!el) return;
+    updateScrollState();
+    el.addEventListener("scroll", updateScrollState, { passive: true });
+    const ro = new ResizeObserver(updateScrollState);
+    ro.observe(el);
+    return () => { el.removeEventListener("scroll", updateScrollState); ro.disconnect(); };
+  }, [updateScrollState]);
 
   function queueHours() {
     return (games.queue || []).reduce((a, g) => {
@@ -103,7 +123,9 @@ export function GamesTab({ theme }: Props) {
             Clear
           </button>
         )}
-        <button className="btn btn-gold btn-sm" onClick={() => setAddOpen(true)} data-testid="add-game-btn">+ Add Game</button>
+        <button className="btn btn-gold btn-sm btn-add-game" onClick={() => setAddOpen(true)} data-testid="add-game-btn">
+          <span className="btn-label">+ Add Game</span>
+        </button>
       </div>
 
       {/* Global search results */}
@@ -154,7 +176,14 @@ export function GamesTab({ theme }: Props) {
       ) : (
         <>
           {/* Category tabs */}
-          <div className="cat-tabs" id="normal-games-view">
+          <div className="cat-tabs-outer">
+            {canScrollLeft && (
+              <button className="cat-tabs-arrow cat-tabs-arrow-left" onClick={() => { tabsRef.current?.scrollBy({ left: -120, behavior: "smooth" }); }} aria-label="Scroll left">‹</button>
+            )}
+            {canScrollRight && (
+              <button className="cat-tabs-arrow cat-tabs-arrow-right" onClick={() => { tabsRef.current?.scrollBy({ left: 120, behavior: "smooth" }); }} aria-label="Scroll right">›</button>
+            )}
+            <div className="cat-tabs" id="normal-games-view" ref={tabsRef}>
             {ALL_CATS.map((c) => (
               <button
                 key={c}
@@ -167,7 +196,7 @@ export function GamesTab({ theme }: Props) {
               </button>
             ))}
             <span className="cat-meta" id="queue-hours-meta">~{Math.round(queueHours())}h in queue</span>
-          </div>
+          </div></div>
 
           {/* Inbox banner */}
           {isInbox && (

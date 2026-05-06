@@ -84,10 +84,10 @@ export function PendingTab({ theme }: Props) {
         <button
           id="refresh-pending-btn"
           className="btn btn-ghost btn-sm"
-          onClick={async () => { setRefreshLoading(true); await loadPending(); setRefreshLoading(false); }}
+          onClick={async () => { setRefreshLoading(true); await Promise.all([loadPending(), new Promise(r => setTimeout(r, 250))]); setRefreshLoading(false); }}
           disabled={refreshLoading}
         >
-          {refreshLoading ? "Refreshing…" : "Refresh"}
+          {refreshLoading ? <><span className="spinner" />Refreshing…</> : "Refresh"}
         </button>
         <button className="btn btn-ghost btn-sm" onClick={toggleHistory} style={{ marginLeft: "auto" }}>
           {historyVisible ? "Hide History" : "Show History"}

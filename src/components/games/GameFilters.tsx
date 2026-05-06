@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { tagColor } from "../../themes";
 
 const MODES: Record<string, string> = {
@@ -27,53 +28,80 @@ interface Props {
 export function GameFilters({ cat, modeFilter, riskFilter, sortBy, theme, onModeToggle, onRiskToggle, onSortChange }: Props) {
   const showMode = cat !== "played";
   const showRisk = cat === "caveats";
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const hasActive = !!(modeFilter || riskFilter);
+
+  const modeButtons = showMode && Object.keys(MODES).map((k) => {
+    const c = tagColor(MODES, MODES_LIGHT, k, theme);
+    const active = modeFilter === k;
+    return (
+      <button
+        key={k}
+        className={`filter-btn${active ? " active" : ""}`}
+        style={active ? { background: c, borderColor: c, color: theme === "light" ? "#fff" : "#0d0d14" } : {}}
+        onClick={() => onModeToggle(k)}
+      >
+        {k}
+      </button>
+    );
+  });
+
+  const riskButtons = showRisk && ["low", "medium", "high"].map((r) => {
+    const c = tagColor(RISK_COLORS, RISK_COLORS_LIGHT, r, theme);
+    const active = riskFilter === r;
+    return (
+      <button
+        key={r}
+        className={`filter-btn${active ? " active" : ""}`}
+        style={active ? { background: c, borderColor: c, color: theme === "light" ? "#fff" : "#0d0d14" } : {}}
+        onClick={() => onRiskToggle(r)}
+      >
+        {r}
+      </button>
+    );
+  });
+
+  const sortSelect = (
+    <select className="sort-select" value={sortBy} onChange={(e) => onSortChange(e.target.value)}>
+      <option value="rank">Sort: Rank</option>
+      <option value="hours">Sort: Hours</option>
+      <option value="title">Sort: Title</option>
+      {cat === "played" && <option value="playedDate">Sort: Date Played</option>}
+    </select>
+  );
 
   return (
-    <div className="filters">
-      {showMode && (
-        <>
-          <label>Mode:</label>
-          {Object.keys(MODES).map((k) => {
-            const c = tagColor(MODES, MODES_LIGHT, k, theme);
-            const active = modeFilter === k;
-            return (
-              <button
-                key={k}
-                className={`filter-btn${active ? " active" : ""}`}
-                style={active ? { background: c, borderColor: c, color: theme === "light" ? "#fff" : "#0d0d14" } : {}}
-                onClick={() => onModeToggle(k)}
-              >
-                {k}
-              </button>
-            );
-          })}
-        </>
-      )}
-      {showRisk && (
-        <>
-          <label>Risk:</label>
-          {["low", "medium", "high"].map((r) => {
-            const c = tagColor(RISK_COLORS, RISK_COLORS_LIGHT, r, theme);
-            const active = riskFilter === r;
-            return (
-              <button
-                key={r}
-                className={`filter-btn${active ? " active" : ""}`}
-                style={active ? { background: c, borderColor: c, color: theme === "light" ? "#fff" : "#0d0d14" } : {}}
-                onClick={() => onRiskToggle(r)}
-              >
-                {r}
-              </button>
-            );
-          })}
-        </>
-      )}
-      <select className="sort-select" value={sortBy} onChange={(e) => onSortChange(e.target.value)}>
-        <option value="rank">Sort: Rank</option>
-        <option value="hours">Sort: Hours</option>
-        <option value="title">Sort: Title</option>
-        {cat === "played" && <option value="playedDate">Sort: Date Played</option>}
-      </select>
-    </div>
+    <>
+      {/* Mobile toggle row */}
+      <div className="filters-toggle-row">
+        {(showMode || showRisk) && (
+          <button
+            className={`filters-toggle-btn${hasActive ? " has-active" : ""}`}
+            onClick={() => setFiltersOpen((o) => !o)}
+          >
+            {filtersOpen ? "▲ " : "▼ "}Filters{hasActive ? " ●" : ""}
+          </button>
+        )}
+        {sortSelect}
+      </div>
+
+      {/* Desktop: always visible inline; Mobile: collapsible panel */}
+      <div className={`filters${filtersOpen ? " open" : ""}`}>
+        {showMode && (
+          <>
+            <label>Mode:</label>
+            {modeButtons}
+          </>
+        )}
+        {showRisk && (
+          <>
+            <label>Risk:</label>
+            {riskButtons}
+          </>
+        )}
+        {/* Sort select visible on desktop inline; hidden on mobile (shown in toggle row instead) */}
+        <span className="filters-sort-desktop">{sortSelect}</span>
+      </div>
+    </>
   );
 }
