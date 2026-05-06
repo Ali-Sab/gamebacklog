@@ -37,13 +37,13 @@ export function SettingsTab({ theme, onThemeChange }: Props) {
   // Import/export
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // MCP URL
-  const [mcpUrl, setMcpUrl] = useState("");
+  // MCP connection info
+  const [mcpInfo, setMcpInfo] = useState<{ url: string; clientId: string; clientSecret: string } | null>(null);
 
   useEffect(() => {
     loadRecoveryCount();
     loadPasskeys();
-    api("GET", "/api/mcp-url").then((data) => { if (data.url) setMcpUrl(data.url); });
+    api("GET", "/api/mcp-url").then((data) => { if (data.url) setMcpInfo(data); });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadRecoveryCount() {
@@ -214,11 +214,24 @@ export function SettingsTab({ theme, onThemeChange }: Props) {
       <div className="settings-section">
         <div className="settings-title">Connect Claude</div>
         <div className="settings-desc">
-          Add the MCP endpoint below to Claude.ai's custom connector settings to allow Claude to read and suggest changes to your game library.
+          Add these credentials to Claude.ai → Settings → Integrations → Add MCP Server to allow Claude to read and suggest changes to your game library.
         </div>
-        <div style={{ fontFamily: "var(--mono)", fontSize: 12, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, padding: "10px 14px", wordBreak: "break-all", color: "var(--sub)" }}>
-          {mcpUrl || "Loading…"}
-        </div>
+        {mcpInfo ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {(["url", "clientId", "clientSecret"] as const).map((key) => (
+              <div key={key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 100, fontSize: 12, color: "var(--muted)", flexShrink: 0 }}>
+                  {key === "url" ? "MCP endpoint" : key === "clientId" ? "Client ID" : "Client Secret"}
+                </div>
+                <div style={{ fontFamily: "var(--mono)", fontSize: 12, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, padding: "6px 10px", wordBreak: "break-all", color: "var(--sub)", flex: 1 }}>
+                  {mcpInfo[key] || <span style={{ color: "var(--muted)" }}>not set</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>Loading…</div>
+        )}
       </div>
 
       {showRecoveryCodes && (

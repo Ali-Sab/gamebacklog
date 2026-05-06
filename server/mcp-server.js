@@ -6,7 +6,28 @@ const { CallToolRequestSchema, ListToolsRequestSchema, ErrorCode, McpError } = r
 const express = require("express");
 const crypto  = require("crypto");
 const { createOrUpdate } = require("./pendingTypes");
-const { readGames, readProfile, readPending, writePending } = require("./db");
+const { readGames, readProfile, readPending, writePending, getOAuthToken } = require("./db");
+
+function requireMcpToken(req, res, next) {
+  const proto    = req.headers["x-forwarded-proto"] || req.protocol;
+  const host     = req.headers["x-forwarded-host"]  || req.get("host");
+  const prefix   = req.headers["x-forwarded-prefix"] || "";
+  const issuer   = `${proto}://${host}`;
+  const mcpPath  = `${prefix}/mcp`;
+
+  const header = req.headers.authorization || "";
+  const token  = header.startsWith("Bearer ") ? header.slice(7) : null;
+  if (!token) {
+    res.setHeader("WWW-Authenticate", `Bearer resource_metadata_url="${issuer}/.well-known/oauth-protected-resource${mcpPath}"`);
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  const hash = crypto.createHash("sha256").update(token).digest("hex");
+  if (!getOAuthToken(hash)) {
+    res.setHeader("WWW-Authenticate", `Bearer error="invalid_token"`);
+    return res.status(401).json({ error: "invalid_token" });
+  }
+  next();
+}
 
 // ─── Tool implementations (exported for unit testing) ─────────────────────────
 
@@ -89,6 +110,8 @@ async function execTool(name, args = {}, readJSON, writeJSON) {
 function createMcpRouter() {
   const router = express.Router();
   const sessions = new Map(); // sessionId -> transport
+
+  router.use(requireMcpToken);
 
   function buildServer() {
     const server = new Server(

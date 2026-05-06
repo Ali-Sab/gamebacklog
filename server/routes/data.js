@@ -5,12 +5,15 @@ const router  = express.Router();
 const { db, readGames, writeGames, readProfile, writeProfile } = require("../db");
 const requireAuth = require("../middleware/requireAuth");
 
-// MCP URL for display in settings
+// MCP connection info for display in settings
 router.get("/mcp-url", requireAuth, (req, res) => {
-  const token = process.env.MCP_TOKEN || "";
-  const base  = `${req.protocol}://${req.get("host")}`;
-  const path  = token ? `/mcp/${token}` : `/mcp`;
-  res.json({ url: `${base}${path}` });
+  const proto = req.headers["x-forwarded-proto"] || req.protocol;
+  const host  = req.headers["x-forwarded-host"]  || req.get("host");
+  res.json({
+    url:          `${proto}://${host}/mcp`,
+    clientId:     process.env.OAUTH_CLIENT_ID     || "",
+    clientSecret: process.env.OAUTH_CLIENT_SECRET || "",
+  });
 });
 
 // Get all app data (games + profile)

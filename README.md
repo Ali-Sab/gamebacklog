@@ -47,7 +47,8 @@ Open `.env` and fill in:
 | Variable | Description |
 |----------|-------------|
 | `JWT_SECRET` | Random secret for signing login tokens — generate with: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"` |
-| `MCP_TOKEN` | Secret embedded in the MCP URL — generate with: `node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"` |
+| `OAUTH_CLIENT_ID` | Client ID for Claude's MCP connector — generate with: `node -e "console.log(require('crypto').randomUUID())"` |
+| `OAUTH_CLIENT_SECRET` | Client secret for Claude's MCP connector — generate with: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 | `PORT` | Port to listen on (default: `3000`) |
 | `NODE_ENV` | `development` locally, `production` on a server |
 
@@ -263,13 +264,9 @@ tailscale funnel off
 Once the server is running publicly, connect Claude.ai to your game library:
 
 1. Go to **Claude.ai → Settings → Integrations → Add custom connector**
-2. Set the **Server URL** to:
-   ```
-   https://myserver.tail1234.ts.net/mcp/YOUR_MCP_TOKEN
-   ```
-   (The `MCP_TOKEN` from your `.env` is embedded in the URL — it's the credential. It's encrypted in transit over HTTPS so it can't be sniffed.)
-3. Leave the OAuth fields blank
-4. Click Connect
+2. Set the **Server URL** to `https://myserver.tail1234.ts.net/mcp`
+3. Enter the **Client ID** and **Client Secret** from your `.env` (also shown in the app's Settings tab)
+4. Click Connect — Claude will redirect you to your server's login page to approve access
 
 Once connected, Claude can read your library and taste profile and suggest changes. All suggestions appear in the **Pending** tab for your approval — Claude cannot modify your data directly.
 
