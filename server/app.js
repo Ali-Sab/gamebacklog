@@ -12,7 +12,6 @@ const { computeTOTP, hashPassword, verifyTOTP, generateSecret } = require("./lib
 
 const app  = express();
 app.set("trust proxy", 1); // trust first proxy (Nginx / Tailscale Funnel)
-const MCP_TOKEN    = process.env.MCP_TOKEN || "";
 const SERVE_STATIC = process.env.NODE_ENV !== "development";
 
 // ─── Middleware ──────────────────────────────────────────────────────────────
@@ -33,6 +32,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// ─── OAuth routes (mounted at root — no prefix, paths are /.well-known/... and /oauth/...) ──
+app.use("/", require("./routes/oauth"));
+
 // ─── API routes ───────────────────────────────────────────────────────────────
 // Mounted at both paths: /api (nginx-stripped) and /gamebacklog/api (direct access)
 for (const prefix of ["/api", `${BASE_PATH}/api`]) {
@@ -43,21 +45,19 @@ for (const prefix of ["/api", `${BASE_PATH}/api`]) {
 }
 
 // ─── MCP server ───────────────────────────────────────────────────────────────
-function mcpPath(sub = "") { return MCP_TOKEN ? `/mcp/${MCP_TOKEN}${sub}` : `/mcp${sub}`; }
-
-app.options(mcpPath(), (req, res) => {
+app.options("/mcp", (req, res) => {
   res.setHeader("Access-Control-Allow-Origin",  req.headers.origin || "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept");
   res.setHeader("Access-Control-Max-Age", "86400");
   res.sendStatus(204);
 });
-app.use(mcpPath(), (req, res, next) => {
+app.use("/mcp", (req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin",  req.headers.origin || "*");
   res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept");
   next();
 });
-app.use(mcpPath(), createMcpRouter());
+app.use("/mcp", createMcpRouter());
 
 // ─── SPA fallback ────────────────────────────────────────────────────────────
 if (SERVE_STATIC) {
@@ -66,4 +66,4 @@ if (SERVE_STATIC) {
   });
 }
 
-module.exports = { app, mcpPath, computeTOTP, hashPassword, verifyTOTP, generateSecret };
+module.exports = { app, computeTOTP, hashPassword, verifyTOTP, generateSecret };

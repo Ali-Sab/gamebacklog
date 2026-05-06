@@ -97,6 +97,35 @@ db.exec(`
     challenge   TEXT,
     created_at  INTEGER NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS oauth_clients (
+    client_id          TEXT PRIMARY KEY,
+    client_secret_hash TEXT NOT NULL,
+    redirect_uris      TEXT NOT NULL,
+    name               TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS oauth_auth_codes (
+    code                   TEXT PRIMARY KEY,
+    client_id              TEXT NOT NULL,
+    redirect_uri           TEXT NOT NULL,
+    code_challenge         TEXT,
+    code_challenge_method  TEXT,
+    expires_at             INTEGER NOT NULL,
+    used                   INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS oauth_tokens (
+    token_hash  TEXT PRIMARY KEY,
+    client_id   TEXT NOT NULL,
+    expires_at  INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS oauth_refresh_tokens (
+    token_hash  TEXT PRIMARY KEY,
+    client_id   TEXT NOT NULL,
+    expires_at  INTEGER NOT NULL
+  );
 `);
 
 db.exec(`
@@ -423,6 +452,58 @@ function writeSetupState(obj) {
   `).run(obj.username, obj.hash, obj.salt, obj.challenge, obj.createdAt);
 }
 
+// ─── OAuth ────────────────────────────────────────────────────────────────────
+
+function getOAuthClient(clientId) {
+  const row = db.prepare("SELECT * FROM oauth_clients WHERE client_id = ?").get(clientId);
+  if (!row) return null;
+  return { clientId: row.client_id, clientSecretHash: row.client_secret_hash, redirectUris: JSON.parse(row.redirect_uris), name: row.name };
+}
+
+function upsertOAuthClient(client) {
+  db.prepare(`
+    INSERT INTO oauth_clients (client_id, client_secret_hash, redirect_uris, name)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(client_id) DO UPDATE SET
+      client_secret_hash=excluded.client_secret_hash,
+      redirect_uris=excluded.redirect_uris,
+      name=excluded.name
+  `).run(client.clientId, client.clientSecretHash, JSON.stringify(client.redirectUris), client.name ?? null);
+}
+
+function saveOAuthAuthCode(code, clientId, redirectUri, codeChallenge, codeChallengeMethod, expiresAt) {
+  db.prepare(`
+    INSERT INTO oauth_auth_codes (code, client_id, redirect_uri, code_challenge, code_challenge_method, expires_at, used)
+    VALUES (?, ?, ?, ?, ?, ?, 0)
+  `).run(code, clientId, redirectUri, codeChallenge ?? null, codeChallengeMethod ?? null, expiresAt);
+}
+
+function getAndConsumeOAuthAuthCode(code) {
+  const row = db.prepare("SELECT * FROM oauth_auth_codes WHERE code = ? AND used = 0").get(code);
+  if (!row) return null;
+  db.prepare("UPDATE oauth_auth_codes SET used = 1 WHERE code = ?").run(code);
+  return { code: row.code, clientId: row.client_id, redirectUri: row.redirect_uri, codeChallenge: row.code_challenge, codeChallengeMethod: row.code_challenge_method, expiresAt: row.expires_at };
+}
+
+function saveOAuthToken(tokenHash, clientId, expiresAt) {
+  db.prepare("INSERT INTO oauth_tokens (token_hash, client_id, expires_at) VALUES (?, ?, ?)").run(tokenHash, clientId, expiresAt);
+}
+
+function getOAuthToken(tokenHash) {
+  return db.prepare("SELECT * FROM oauth_tokens WHERE token_hash = ? AND expires_at > ?").get(tokenHash, Date.now());
+}
+
+function saveOAuthRefreshToken(tokenHash, clientId, expiresAt) {
+  db.prepare("INSERT INTO oauth_refresh_tokens (token_hash, client_id, expires_at) VALUES (?, ?, ?)").run(tokenHash, clientId, expiresAt);
+}
+
+function getAndRotateOAuthRefreshToken(tokenHash) {
+  const row = db.prepare("SELECT * FROM oauth_refresh_tokens WHERE token_hash = ? AND expires_at > ?").get(tokenHash, Date.now());
+  if (!row) return null;
+  db.prepare("DELETE FROM oauth_refresh_tokens WHERE token_hash = ?").run(tokenHash);
+  return { clientId: row.client_id, expiresAt: row.expires_at };
+}
+
 module.exports = {
   db,
   // Games
@@ -443,4 +524,9 @@ module.exports = {
   readWebAuthnChallenge, writeWebAuthnChallenge,
   // Setup state
   readSetupState, writeSetupState,
+  // OAuth
+  getOAuthClient, upsertOAuthClient,
+  saveOAuthAuthCode, getAndConsumeOAuthAuthCode,
+  saveOAuthToken, getOAuthToken,
+  saveOAuthRefreshToken, getAndRotateOAuthRefreshToken,
 };
