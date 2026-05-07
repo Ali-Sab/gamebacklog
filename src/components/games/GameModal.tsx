@@ -19,7 +19,7 @@ interface Props {
 export function GameModal({ title, sub, initial, maxRank, onSubmit, onClose }: Props) {
   const [fields, setFields] = useState<Partial<Game>>({
     title: initial.title || "",
-    mode: initial.mode || "",
+    genre: initial.genre || "",
     risk: initial.risk || "",
     hours: initial.hours || "",
     platform: initial.platform || "",
@@ -78,7 +78,7 @@ export function GameModal({ title, sub, initial, maxRank, onSubmit, onClose }: P
         />
       </div>
       <div style={{ display: "flex", gap: 10 }}>
-        <div className="field" style={{ flex: 1 }}><label htmlFor="gm-mode">Mode</label>{sel("mode", MODES, "gm-mode")}</div>
+        <div className="field" style={{ flex: 1 }}><label htmlFor="gm-genre">Genre</label>{sel("genre", MODES, "gm-genre")}</div>
         <div className="field" style={{ flex: 1 }}><label htmlFor="gm-risk">Risk</label>{sel("risk", RISKS, "gm-risk")}</div>
         <div className="field" style={{ width: 90 }}>
           <label htmlFor="gm-hours">Hours</label>

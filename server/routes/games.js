@@ -21,7 +21,7 @@ router.post("/games", requireAuth, (req, res) => {
   const game = {
     id,
     title:    fields.title.trim(),
-    mode:     fields.mode     || null,
+    genre:    fields.genre    || null,
     risk:     fields.risk     || null,
     hours:    fields.hours    || null,
     note:     fields.note     || null,

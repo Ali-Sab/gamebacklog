@@ -15,11 +15,11 @@ function json(result) {
 const GAMES = {
   inbox: [],
   queue: [
-    { id: "q1", title: "Hollow Knight", mode: "atmospheric", risk: "",       hours: "40", note: "Essential metroidvania" },
-    { id: "q2", title: "SOMA",          mode: "atmospheric", risk: "",       hours: "10", note: "Existential horror"     }
+    { id: "q1", title: "Hollow Knight", genre: "atmospheric", risk: "",       hours: "40", note: "Essential metroidvania" },
+    { id: "q2", title: "SOMA",          genre: "atmospheric", risk: "",       hours: "10", note: "Existential horror"     }
   ],
   caveats: [
-    { id: "c1", title: "Hades",         mode: "action",      risk: "medium", hours: "22", note: "Roguelike with story"  }
+    { id: "c1", title: "Hades",         genre: "action",      risk: "medium", hours: "22", note: "Roguelike with story"  }
   ],
   decompression: [],
   yourCall: [],
@@ -65,7 +65,7 @@ describe("get_game_library", () => {
     const data = json(await execTool("get_game_library", {}, readJSON, writeJSON));
     const game = data.queue[0];
     expect(game.title).toBe("Hollow Knight");
-    expect(game.mode).toBe("atmospheric");
+    expect(game.genre).toBe("atmospheric");
     expect(game.hours).toBe("40");
     expect(game.category).toBe("queue");
   });
@@ -202,7 +202,7 @@ describe("suggest_new_game", () => {
     await execTool("suggest_new_game", {
       title: "Disco Elysium",
       category: "queue",
-      mode: "detective",
+      genre: "detective",
       risk: "",
       hours: "30",
       note: "Extraordinary writing",
@@ -214,7 +214,7 @@ describe("suggest_new_game", () => {
     expect(item.status).toBe("pending");
     expect(item.data.title).toBe("Disco Elysium");
     expect(item.data.category).toBe("queue");
-    expect(item.data.mode).toBe("detective");
+    expect(item.data.genre).toBe("detective");
     expect(item.data.hours).toBe("30");
     expect(item.data.note).toBe("Extraordinary writing");
     expect(item.reason).toBe("Perfect fit");
@@ -227,7 +227,7 @@ describe("suggest_new_game", () => {
     }, readJSON, writeJSON);
 
     const item = store["pending.json"][0];
-    expect(item.data.mode).toBe("");
+    expect(item.data.genre).toBe("");
     expect(item.data.risk).toBe("");
     expect(item.data.hours).toBe("");
     expect(item.data.note).toBe("");

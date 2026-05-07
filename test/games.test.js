@@ -59,7 +59,7 @@ describe("POST /api/games", () => {
       .set(auth())
       .send({
         title: "Hollow Knight",
-        mode: "atmospheric",
+        genre: "atmospheric",
         hours: "40",
         note: "Essential metroidvania",
         platform: "pc",
@@ -242,7 +242,7 @@ describe("new fields (platform/input/imageUrl) survive /api/data round-trip", ()
         id: "rt1", title: "Round Trip",
         platform: "ps5", input: "ps5-controller",
         imageUrl: "https://example.com/img.jpg",
-        mode: "narrative", hours: "10", note: ""
+        genre: "narrative", hours: "10", note: ""
       }],
       queue: [], caveats: [], decompression: [], yourCall: [], played: []
     };

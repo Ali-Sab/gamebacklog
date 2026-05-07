@@ -71,16 +71,17 @@ const HANDLERS = {
   new_game: {
     dedup: (args, pending) =>
       pending.find(p => p.status === "pending" && p.type === "new_game" && p.data.title === args.title),
-    buildData: ({ title, category, mode = "", risk = "", hours = "", note = "", url = "", platform = "", input = "", imageUrl = "", rank }) => ({
-      title, category, mode, risk, hours, note, url, platform, input, imageUrl,
+    buildData: ({ title, category, genre = "", risk = "", hours = "", note = "", url = "", platform = "", input = "", imageUrl = "", rank }) => ({
+      title, category, genre, risk, hours, note, url, platform, input, imageUrl,
       ...(rank != null ? { rank } : {})
     }),
     apply({ data }, { games }) {
-      const { title, category, mode, risk, hours, note, url, platform, input, imageUrl, rank } = data;
+      const { title, category, risk, hours, note, url, platform, input, imageUrl, rank } = data;
+      const genre = data.genre ?? data.mode;
       const id = "mcp-" + crypto.randomBytes(4).toString("hex");
       const list = games[category] || [];
       const newRank = assignRank(list, rank);
-      games[category] = [...list, { id, title, mode, risk, hours, note, url, platform, input, imageUrl, rank: newRank }];
+      games[category] = [...list, { id, title, genre, risk, hours, note, url, platform, input, imageUrl, rank: newRank }];
     }
   },
 
@@ -88,9 +89,10 @@ const HANDLERS = {
     dedup: (args, pending) =>
       pending.find(p => p.status === "pending" && p.type === "game_edit"
         && p.data.title.toLowerCase() === args.title.toLowerCase()),
-    buildData({ title, mode, hours, note, url, platform, input, imageUrl }) {
+    buildData({ title, genre, risk, hours, note, url, platform, input, imageUrl }) {
       const changes = {};
-      if (mode     !== undefined) changes.mode     = mode;
+      if (genre    !== undefined) changes.genre    = genre;
+      if (risk     !== undefined) changes.risk     = risk;
       if (hours    !== undefined) changes.hours    = hours;
       if (note     !== undefined) changes.note     = note;
       if (url      !== undefined) changes.url      = url;
@@ -101,7 +103,13 @@ const HANDLERS = {
     },
     apply({ data }, { games }) {
       const game = findGameByTitle(games, data.title);
-      if (game) Object.assign(game, data.changes);
+      if (!game) return;
+      const changes = { ...data.changes };
+      if (changes.mode !== undefined && changes.genre === undefined) {
+        changes.genre = changes.mode;
+        delete changes.mode;
+      }
+      Object.assign(game, changes);
     }
   },
 

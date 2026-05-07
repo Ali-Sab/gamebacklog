@@ -266,7 +266,7 @@ Once the server is running publicly, connect Claude.ai to your game library:
 1. Go to **Claude.ai → Settings → Integrations → Add custom connector**
 2. Set the **Server URL** to `https://myserver.tail1234.ts.net/mcp`
 3. Enter the **Client ID** and **Client Secret** from your `.env` (also shown in the app's Settings tab)
-4. Click Connect — Claude will redirect you to your server's login page to approve access
+4. Click Connect — Claude will redirect you to your server's authorize page. If you're already logged into the app in the same browser, access is granted automatically; otherwise you'll be prompted for your password and 2FA code
 
 Once connected, Claude can read your library and taste profile and suggest changes. All suggestions appear in the **Pending** tab for your approval — Claude cannot modify your data directly.
 

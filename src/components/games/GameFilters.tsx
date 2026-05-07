@@ -16,30 +16,31 @@ const RISK_COLORS_LIGHT: Record<string, string> = { low: "#1a6b40", medium: "#7a
 
 interface Props {
   cat: string;
-  modeFilter: string | null;
+  genreFilter: string | null;
   riskFilter: string | null;
   sortBy: string;
   theme: string;
-  onModeToggle: (m: string) => void;
+  hours: number;
+  onGenreToggle: (m: string) => void;
   onRiskToggle: (r: string) => void;
   onSortChange: (s: string) => void;
 }
 
-export function GameFilters({ cat, modeFilter, riskFilter, sortBy, theme, onModeToggle, onRiskToggle, onSortChange }: Props) {
-  const showMode = cat !== "played";
+export function GameFilters({ cat, genreFilter, riskFilter, sortBy, theme, hours, onGenreToggle, onRiskToggle, onSortChange }: Props) {
+  const showGenre = cat !== "played";
   const showRisk = cat === "caveats";
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const hasActive = !!(modeFilter || riskFilter);
+  const hasActive = !!(genreFilter || riskFilter);
 
-  const modeButtons = showMode && Object.keys(MODES).map((k) => {
+  const genreButtons = showGenre && Object.keys(MODES).map((k) => {
     const c = tagColor(MODES, MODES_LIGHT, k, theme);
-    const active = modeFilter === k;
+    const active = genreFilter === k;
     return (
       <button
         key={k}
         className={`filter-btn${active ? " active" : ""}`}
         style={active ? { background: c, borderColor: c, color: theme === "light" ? "#fff" : "#0d0d14" } : {}}
-        onClick={() => onModeToggle(k)}
+        onClick={() => onGenreToggle(k)}
       >
         {k}
       </button>
@@ -74,7 +75,7 @@ export function GameFilters({ cat, modeFilter, riskFilter, sortBy, theme, onMode
     <>
       {/* Mobile toggle row */}
       <div className="filters-toggle-row">
-        {(showMode || showRisk) && (
+        {(showGenre || showRisk) && (
           <button
             className={`filters-toggle-btn${hasActive ? " has-active" : ""}`}
             onClick={() => setFiltersOpen((o) => !o)}
@@ -87,10 +88,11 @@ export function GameFilters({ cat, modeFilter, riskFilter, sortBy, theme, onMode
 
       {/* Desktop: always visible inline; Mobile: collapsible panel */}
       <div className={`filters${filtersOpen ? " open" : ""}`}>
-        {showMode && (
+        {hours > 0 && <span className="filters-hours">~{Math.round(hours)}h</span>}
+        {showGenre && (
           <>
-            <label>Mode:</label>
-            {modeButtons}
+            <label>Genre:</label>
+            {genreButtons}
           </>
         )}
         {showRisk && (

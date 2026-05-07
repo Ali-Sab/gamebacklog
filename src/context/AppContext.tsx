@@ -11,7 +11,7 @@ export interface Game {
   id: string;
   title: string;
   rank?: number;
-  mode?: string;
+  genre?: string;
   risk?: string;
   hours?: string;
   note?: string;
@@ -47,7 +47,7 @@ interface AppState {
   profile: ProfileSection[];
   pendingItems: PendingItem[];
   activeCat: string;
-  modeFilter: string | null;
+  genreFilter: string | null;
   riskFilter: string | null;
   sortBy: string;
   globalSearch: string;
@@ -60,7 +60,7 @@ type AppAction =
   | { type: "SET_PROFILE"; profile: ProfileSection[] }
   | { type: "SET_PENDING"; pending: PendingItem[] }
   | { type: "SET_CAT"; cat: string }
-  | { type: "SET_MODE_FILTER"; mode: string | null }
+  | { type: "SET_GENRE_FILTER"; genre: string | null }
   | { type: "SET_RISK_FILTER"; risk: string | null }
   | { type: "SET_SORT"; sortBy: string }
   | { type: "SET_SEARCH"; query: string };
@@ -78,11 +78,11 @@ function reducer(state: AppState, action: AppAction): AppState {
     case "SET_CAT":
       return {
         ...state, activeCat: action.cat,
-        modeFilter: null, riskFilter: null,
+        genreFilter: null, riskFilter: null,
         sortBy: action.cat === "played" ? "playedDate" : "rank",
       };
-    case "SET_MODE_FILTER":
-      return { ...state, modeFilter: action.mode };
+    case "SET_GENRE_FILTER":
+      return { ...state, genreFilter: action.genre };
     case "SET_RISK_FILTER":
       return { ...state, riskFilter: action.risk };
     case "SET_SORT":
@@ -99,7 +99,7 @@ const initial: AppState = {
   profile: [],
   pendingItems: [],
   activeCat: "queue",
-  modeFilter: null,
+  genreFilter: null,
   riskFilter: null,
   sortBy: "rank",
   globalSearch: "",
@@ -111,7 +111,7 @@ interface AppContextValue {
   loadApp: () => Promise<void>;
   loadPending: () => Promise<void>;
   setActiveCat: (cat: string) => void;
-  setModeFilter: (mode: string | null) => void;
+  setGenreFilter: (genre: string | null) => void;
   setRiskFilter: (risk: string | null) => void;
   setSortBy: (s: string) => void;
   setGlobalSearch: (q: string) => void;
@@ -264,7 +264,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loadApp,
         loadPending,
         setActiveCat: (cat) => dispatch({ type: "SET_CAT", cat }),
-        setModeFilter: (mode) => dispatch({ type: "SET_MODE_FILTER", mode }),
+        setGenreFilter: (genre) => dispatch({ type: "SET_GENRE_FILTER", genre }),
         setRiskFilter: (risk) => dispatch({ type: "SET_RISK_FILTER", risk }),
         setSortBy: (sortBy) => dispatch({ type: "SET_SORT", sortBy }),
         setGlobalSearch: (query) => dispatch({ type: "SET_SEARCH", query }),

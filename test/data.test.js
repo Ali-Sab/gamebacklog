@@ -44,7 +44,7 @@ describe("POST /api/data", () => {
   });
 
   test("saves games and returns ok", async () => {
-    const games = { queue: [{ id: "q1", title: "Test Game", mode: "rpg", hours: "10", note: "" }], played: [] };
+    const games = { queue: [{ id: "q1", title: "Test Game", genre: "rpg", hours: "10", note: "" }], played: [] };
     const res = await request(app).post("/api/data").set(auth()).send({ games }).expect(200);
     expect(res.body.ok).toBe(true);
   });
@@ -63,10 +63,11 @@ describe("POST /api/data", () => {
 describe("data round-trip", () => {
   const games = {
     inbox:         [],
-    queue:         [{ id: "q1", title: "Hollow Knight", mode: "atmospheric", hours: "40", note: "Essential" }],
+    queue:         [{ id: "q1", title: "Hollow Knight", genre: "atmospheric", hours: "40", note: "Essential" }],
     caveats:       [],
     decompression: [],
     yourCall:      [],
+    skip:          [],
     played:        [{ id: "p1", title: "SOMA", playedDate: "1/1/2024" }]
   };
   const profile = [{ name: "CORE IDENTITY", text: "I love atmospheric games." }];
@@ -95,8 +96,8 @@ describe("POST /api/data validation", () => {
   // Seed known-good state so we can verify rejected payloads don't corrupt it
   const goodGames = {
     inbox: [],
-    queue: [{ id: "v1", title: "Validation Seed", mode: "rpg", hours: "5", note: "" }],
-    caveats: [], decompression: [], yourCall: [], played: []
+    queue: [{ id: "v1", title: "Validation Seed", genre: "rpg", hours: "5", note: "" }],
+    caveats: [], decompression: [], yourCall: [], skip: [], played: []
   };
   const goodProfile = [{ name: "VALIDATION SEED", text: "baseline." }];
 
@@ -146,7 +147,7 @@ describe("url field and inbox category", () => {
   test("a game with url survives round-trip", async () => {
     const games = {
       inbox: [{ id: "u1", title: "Inbox Item", url: "https://store.steampowered.com/app/123" }],
-      queue: [], caveats: [], decompression: [], yourCall: [], played: []
+      queue: [], caveats: [], decompression: [], yourCall: [], skip: [], played: []
     };
     await request(app).post("/api/data").set(auth()).send({ games }).expect(200);
     const res = await request(app).get("/api/data").set(auth());
@@ -156,8 +157,8 @@ describe("url field and inbox category", () => {
 
   test("readGames returns inbox key even when no games are in inbox", async () => {
     const games = {
-      queue: [{ id: "q-only", title: "Only Queue", mode: "rpg", hours: "5", note: "" }],
-      caveats: [], decompression: [], yourCall: [], played: []
+      queue: [{ id: "q-only", title: "Only Queue", genre: "rpg", hours: "5", note: "" }],
+      caveats: [], decompression: [], yourCall: [], skip: [], played: []
     };
     await request(app).post("/api/data").set(auth()).send({ games }).expect(200);
     const res = await request(app).get("/api/data").set(auth());
@@ -200,7 +201,7 @@ describe("POST /api/import", () => {
   test("replaces all data on success", async () => {
     const games = {
       inbox: [{ id: "imp1", title: "Imported Game", url: "https://example.com" }],
-      queue: [], caveats: [], decompression: [], yourCall: [], played: []
+      queue: [], caveats: [], decompression: [], yourCall: [], skip: [], played: []
     };
     const importedProfile = [{ name: "IMPORTED PROFILE", text: "hello." }];
     await request(app).post("/api/import").set(auth())

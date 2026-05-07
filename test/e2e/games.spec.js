@@ -31,7 +31,7 @@ test("games tab is visible and active by default", async ({ page }) => {
 });
 
 test("all category tabs are present", async ({ page }) => {
-  const cats = ["Inbox", "Play Queue", "With Caveats", "Decompression", "Your Call", "Played"];
+  const cats = ["Inbox", "Play Queue", "With Caveats", "Decompression", "Your Call", "Played", "Skip"];
   for (const label of cats) {
     await expect(page.locator(`.cat-btn:has-text("${label}")`)).toBeVisible();
   }
@@ -103,7 +103,7 @@ test("Inbox tab hides rank column and move-to dropdown", async ({ page }) => {
 test("Edit button opens prefilled modal and saves changes", async ({ page }) => {
   await seedGames(page, {
     inbox: [],
-    queue: [{ id: "edit-1", title: "Editable Game", mode: "rpg", hours: "10", note: "before" }],
+    queue: [{ id: "edit-1", title: "Editable Game", genre: "rpg", hours: "10", note: "before" }],
     caveats: [], decompression: [], yourCall: [], played: []
   });
   await page.reload();
@@ -122,7 +122,7 @@ test("Edit button opens prefilled modal and saves changes", async ({ page }) => 
 test("Delete button removes the game after confirmation", async ({ page }) => {
   await seedGames(page, {
     inbox: [],
-    queue: [{ id: "del-1", title: "Doomed Game", mode: "rpg", hours: "10", note: "" }],
+    queue: [{ id: "del-1", title: "Doomed Game", genre: "rpg", hours: "10", note: "" }],
     caveats: [], decompression: [], yourCall: [], played: []
   });
   await page.reload();
@@ -142,8 +142,8 @@ test("game table renders after switching categories", async ({ page }) => {
 test("search filters games by title", async ({ page }) => {
   await seedGames(page, {
     queue: [
-      { id: "e2e-1", title: "Hollow Knight", mode: "atmospheric", risk: "", hours: "40", note: "Great game" },
-      { id: "e2e-2", title: "SOMA",           mode: "atmospheric", risk: "", hours: "10", note: "Eerie"      },
+      { id: "e2e-1", title: "Hollow Knight", genre: "atmospheric", risk: "", hours: "40", note: "Great game" },
+      { id: "e2e-2", title: "SOMA",           genre: "atmospheric", risk: "", hours: "10", note: "Eerie"      },
     ],
     caveats: [], decompression: [], yourCall: [], played: []
   });
@@ -172,10 +172,111 @@ test("mark played button appears on non-played games", async ({ page }) => {
 test("switching to played category shows no mark-played button", async ({ page }) => {
   await seedGames(page, {
     queue: [], caveats: [], decompression: [], yourCall: [],
-    played: [{ id: "e2e-p1", title: "Finished Game", mode: "action", risk: "", hours: "20", note: "", playedDate: "1/1/2025" }]
+    played: [{ id: "e2e-p1", title: "Finished Game", genre: "action", risk: "", hours: "20", note: "", playedDate: "1/1/2025" }]
   });
   await page.reload();
   await page.waitForSelector('[data-testid="screen-main"]');
   await page.click(".cat-btn[data-cat='played']");
   await expect(page.locator(".action-played")).toHaveCount(0);
+});
+
+test("Skip tab shows games moved there via dropdown", async ({ page }) => {
+  await seedGames(page, {
+    queue: [{ id: "sk1", title: "Skip This Game", genre: "action", hours: "20", note: "" }],
+    caveats: [], decompression: [], yourCall: [], skip: [], played: []
+  });
+  await page.reload();
+  await page.waitForSelector('[data-testid="screen-main"]');
+
+  // Move the game to Skip via the move dropdown
+  await page.locator(".game-row:has-text('Skip This Game') select").selectOption("skip");
+  await page.waitForResponse((r) => r.url().includes("/api/games") && r.status() === 200);
+
+  await page.click(".cat-btn[data-cat='skip']");
+  await expect(page.locator(".game-title:has-text('Skip This Game')")).toBeVisible();
+  // Game is gone from queue
+  await page.click(".cat-btn[data-cat='queue']");
+  await expect(page.locator(".game-title:has-text('Skip This Game')")).toHaveCount(0);
+});
+
+test("mark played via button moves game to played category", async ({ page }) => {
+  await seedGames(page, {
+    queue: [{ id: "mp1", title: "Mark Me Played", genre: "narrative", hours: "15", note: "" }],
+    caveats: [], decompression: [], yourCall: [], played: []
+  });
+  await page.reload();
+  await page.waitForSelector('[data-testid="screen-main"]');
+
+  await page.locator(".game-row:has-text('Mark Me Played') .action-played").click();
+  await page.waitForResponse((r) => r.url().includes("/played") && r.status() === 200);
+
+  await page.click(".cat-btn[data-cat='played']");
+  await expect(page.locator(".game-title:has-text('Mark Me Played')")).toBeVisible();
+  await page.click(".cat-btn[data-cat='queue']");
+  await expect(page.locator(".game-title:has-text('Mark Me Played')")).toHaveCount(0);
+});
+
+test("genre filter button filters list and toggles off", async ({ page }) => {
+  await seedGames(page, {
+    queue: [
+      { id: "gf1", title: "Action Game", genre: "action",     hours: "10", note: "" },
+      { id: "gf2", title: "Puzzle Game", genre: "puzzle",     hours: "5",  note: "" },
+      { id: "gf3", title: "RPG Game",    genre: "rpg",        hours: "60", note: "" },
+    ],
+    caveats: [], decompression: [], yourCall: [], played: []
+  });
+  await page.reload();
+  await page.waitForSelector('[data-testid="screen-main"]');
+
+  // Click the "action" filter button
+  await page.locator(".filter-btn:has-text('action')").click();
+  await expect(page.locator(".game-title:has-text('Action Game')")).toBeVisible();
+  await expect(page.locator(".game-title:has-text('Puzzle Game')")).toHaveCount(0);
+  await expect(page.locator(".game-title:has-text('RPG Game')")).toHaveCount(0);
+
+  // Click again to clear
+  await page.locator(".filter-btn:has-text('action')").click();
+  await expect(page.locator(".game-title:has-text('Puzzle Game')")).toBeVisible();
+  await expect(page.locator(".game-title:has-text('RPG Game')")).toBeVisible();
+});
+
+test("hours count shown in filters bar per category", async ({ page }) => {
+  await seedGames(page, {
+    queue: [
+      { id: "hr1", title: "Short Game", hours: "5",  note: "" },
+      { id: "hr2", title: "Long Game",  hours: "20", note: "" },
+    ],
+    caveats: [], decompression: [], yourCall: [], played: []
+  });
+  await page.reload();
+  await page.waitForSelector('[data-testid="screen-main"]');
+
+  await expect(page.locator(".filters-hours")).toBeVisible();
+  await expect(page.locator(".filters-hours")).toContainText("25h");
+});
+
+test("global search clear button resets results", async ({ page }) => {
+  await page.fill("#global-search", "hollow");
+  await expect(page.locator("#global-clear-btn")).toBeVisible();
+  await page.click("#global-clear-btn");
+  await expect(page.locator("#global-search")).toHaveValue("");
+  await expect(page.locator("#global-clear-btn")).toHaveCount(0);
+});
+
+test("edit modal saves genre and note changes", async ({ page }) => {
+  await seedGames(page, {
+    queue: [{ id: "ed2", title: "Genre Edit Game", genre: "action", hours: "10", note: "old note" }],
+    caveats: [], decompression: [], yourCall: [], played: []
+  });
+  await page.reload();
+  await page.waitForSelector('[data-testid="screen-main"]');
+
+  await page.locator(".game-row:has-text('Genre Edit Game') .row-edit-btn").click();
+  await page.locator("#gm-genre").selectOption("rpg");
+  await page.fill("#gm-note", "new note");
+  await page.click('[data-testid="gm-save"]');
+  await expect(page.locator(".modal")).toHaveCount(0);
+
+  // Genre tag visible in row
+  await expect(page.locator(".game-row:has-text('Genre Edit Game') .tag:has-text('rpg')")).toBeVisible();
 });

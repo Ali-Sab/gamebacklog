@@ -23,8 +23,8 @@ beforeAll(async () => {
   // Seed a game library so move/approve tests have something to work with
   const games = {
     inbox:         [],
-    queue:         [{ id: "q1", title: "Hollow Knight", mode: "atmospheric", hours: "40", note: "Essential" }],
-    caveats:       [{ id: "c1", title: "Hades", mode: "action", risk: "medium", hours: "22", note: "" }],
+    queue:         [{ id: "q1", title: "Hollow Knight", genre: "atmospheric", hours: "40", note: "Essential" }],
+    caveats:       [{ id: "c1", title: "Hades", genre: "action", risk: "medium", hours: "22", note: "" }],
     decompression: [],
     yourCall:      [],
     played:        []
@@ -159,7 +159,7 @@ describe("approve new_game", () => {
     await execTool("suggest_new_game", {
       title: "Disco Elysium",
       category: "queue",
-      mode: "detective",
+      genre: "detective",
       risk: "",
       hours: "30",
       note: "Essential detective RPG",
@@ -183,7 +183,7 @@ describe("suggest_game_edit", () => {
   test("queues a pending game_edit item", async () => {
     await execTool("suggest_game_edit", {
       title: "Hollow Knight",
-      mode: "action",
+      genre: "action",
       hours: "50",
       reason: "More action than atmospheric on reflection"
     });
@@ -192,7 +192,7 @@ describe("suggest_game_edit", () => {
     const item = res.body.find(p => p.type === "game_edit" && p.data.title === "Hollow Knight");
     expect(item).toBeDefined();
     expect(item.status).toBe("pending");
-    expect(item.data.changes.mode).toBe("action");
+    expect(item.data.changes.genre).toBe("action");
     expect(item.data.changes.hours).toBe("50");
     expect(item.data.changes.note).toBeUndefined();
   });
@@ -200,14 +200,14 @@ describe("suggest_game_edit", () => {
   test("second suggestion for same title replaces first", async () => {
     await execTool("suggest_game_edit", {
       title: "Hollow Knight",
-      mode: "immersive",
+      genre: "immersive",
       reason: "Updated take"
     });
 
     const res = await request(app).get("/api/pending").set(auth());
     const items = res.body.filter(p => p.type === "game_edit" && p.data.title === "Hollow Knight" && p.status === "pending");
     expect(items).toHaveLength(1);
-    expect(items[0].data.changes.mode).toBe("immersive");
+    expect(items[0].data.changes.genre).toBe("immersive");
   });
 
   test("returns error when no fields are provided", async () => {
@@ -226,7 +226,7 @@ describe("approve game_edit", () => {
   beforeAll(async () => {
     await execTool("suggest_game_edit", {
       title: "Hades",
-      mode: "action",
+      genre: "action",
       hours: "25",
       note: "Excellent loop",
       reason: "Refined after reflection"
@@ -242,7 +242,7 @@ describe("approve game_edit", () => {
     const allGames = Object.values(dataRes.body.games).flat();
     const hades = allGames.find(g => g.title === "Hades");
     expect(hades).toBeDefined();
-    expect(hades.mode).toBe("action");
+    expect(hades.genre).toBe("action");
     expect(hades.hours).toBe("25");
     expect(hades.note).toBe("Excellent loop");
   });
@@ -289,10 +289,10 @@ describe("approve reorder", () => {
       games: {
         inbox: [],
         queue: [
-          { id: "r1", title: "Alpha",   mode: "rpg",      hours: "10", note: "", rank: 1 },
-          { id: "r2", title: "Bravo",   mode: "tactical", hours: "12", note: "", rank: 2 },
-          { id: "r3", title: "Charlie", mode: "action",   hours: "8",  note: "", rank: 3 },
-          { id: "r4", title: "Delta",   mode: "puzzle",   hours: "5",  note: "", rank: 4 }
+          { id: "r1", title: "Alpha",   genre: "rpg",      hours: "10", note: "", rank: 1 },
+          { id: "r2", title: "Bravo",   genre: "tactical", hours: "12", note: "", rank: 2 },
+          { id: "r3", title: "Charlie", genre: "action",   hours: "8",  note: "", rank: 3 },
+          { id: "r4", title: "Delta",   genre: "puzzle",   hours: "5",  note: "", rank: 4 }
         ],
         caveats: [], decompression: [], yourCall: [], played: []
       }
@@ -348,10 +348,10 @@ describe("POST /api/pending/approve-all", () => {
       games: {
         inbox: [],
         queue: [
-          { id: "a1", title: "Multi A", mode: "rpg",      hours: "10", note: "", rank: 1 },
-          { id: "a2", title: "Multi B", mode: "tactical", hours: "12", note: "", rank: 2 }
+          { id: "a1", title: "Multi A", genre: "rpg",      hours: "10", note: "", rank: 1 },
+          { id: "a2", title: "Multi B", genre: "tactical", hours: "12", note: "", rank: 2 }
         ],
-        caveats:       [{ id: "a3", title: "Multi C", mode: "action", risk: "medium", hours: "8", note: "", rank: 1 }],
+        caveats:       [{ id: "a3", title: "Multi C", genre: "action", risk: "medium", hours: "8", note: "", rank: 1 }],
         decompression: [], yourCall: [], played: []
       },
       profile: [{ name: "CORE", text: "baseline." }]
@@ -368,7 +368,7 @@ describe("POST /api/pending/approve-all", () => {
       title: "Multi C", fromCategory: "caveats", toCategory: "queue", reason: "promote"
     });
     await execTool("suggest_new_game", {
-      title: "Multi D", category: "decompression", mode: "puzzle", hours: "3", reason: "fits"
+      title: "Multi D", category: "decompression", genre: "puzzle", hours: "3", reason: "fits"
     });
     await execTool("suggest_game_edit", {
       title: "Multi A", note: "edited via approve-all", reason: "tighten"
