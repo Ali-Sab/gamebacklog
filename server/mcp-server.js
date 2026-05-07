@@ -49,7 +49,7 @@ async function execTool(name, args = {}, readJSON, writeJSON) {
         const sorted = [...(list || [])].sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
         result[cat] = sorted.map((g, i) => ({
           id: g.id, title: g.title, rank: i + 1,
-          category: cat, mode: g.mode, risk: g.risk, hours: g.hours,
+          category: cat, genre: g.genre, risk: g.risk, hours: g.hours,
           note: g.note || ""
         }));
       }
@@ -87,8 +87,8 @@ async function execTool(name, args = {}, readJSON, writeJSON) {
     }
 
     case "suggest_game_edit": {
-      const { title, mode, hours, note, url, platform, input, imageUrl, reason } = args;
-      const editable = { mode, hours, note, url, platform, input, imageUrl };
+      const { title, genre, risk, hours, note, url, platform, input, imageUrl, reason } = args;
+      const editable = { genre, risk, hours, note, url, platform, input, imageUrl };
       if (Object.values(editable).every(v => v === undefined)) {
         return { content: [{ type: "text", text: "No changes specified." }] };
       }
@@ -120,7 +120,7 @@ function createMcpRouter() {
         capabilities: { tools: {} },
         instructions:
           "This server manages the user's personal game backlog. " +
-          "Categories: inbox, queue, caveats, decompression, yourCall, played. " +
+          "Categories: inbox, queue, caveats, decompression, yourCall, played, skip. " +
           "The inbox category holds games the user added themselves and has not yet triaged. " +
           "When the user asks to sort, triage, process, or clear the inbox — or starts a conversation without a specific request — call get_game_library, then propose moves out of inbox using suggest_game_move. " +
           "All write actions are suggestions only; the user reviews and approves them in the Pending tab."
@@ -146,8 +146,8 @@ function createMcpRouter() {
             type: "object",
             properties: {
               title:        { type: "string", description: "Exact game title" },
-              fromCategory: { type: "string", description: "One of: inbox, queue, caveats, decompression, yourCall, played. Definitions:\ninbox — user-added games waiting for you to triage; always check this category first when the conversation starts and propose moves out of it into the right destination;\nqueue — no friction, ready to play, ranked by priority;\ncaveats — specific identified friction point, paired with risk level (low/medium/high);\ndecompression — low-investment wind-down, no narrative commitment required, not a lower tier;\nyourCall — mismatch signal holding pen; initial categorization feels wrong based on new information or gut; audit periodically to update taste profile; also catch-all for genuinely unclear placements;\nplayed — completed or bounced from" },
-              toCategory:   { type: "string", description: "One of: inbox, queue, caveats, decompression, yourCall, played. Definitions:\ninbox — user-added games waiting for you to triage; always check this category first when the conversation starts and propose moves out of it into the right destination;\nqueue — no friction, ready to play, ranked by priority;\ncaveats — specific identified friction point, paired with risk level (low/medium/high);\ndecompression — low-investment wind-down, no narrative commitment required, not a lower tier;\nyourCall — mismatch signal holding pen; initial categorization feels wrong based on new information or gut; audit periodically to update taste profile; also catch-all for genuinely unclear placements;\nplayed — completed or bounced from" },
+              fromCategory: { type: "string", description: "One of: inbox, queue, caveats, decompression, yourCall, played, skip. Definitions:\ninbox — user-added games waiting for you to triage; always check this category first when the conversation starts and propose moves out of it into the right destination;\nqueue — no friction, ready to play, ranked by priority;\ncaveats — specific identified friction point, paired with risk level (low/medium/high);\ndecompression — low-investment wind-down, no narrative commitment required, not a lower tier;\nyourCall — mismatch signal holding pen; initial categorization feels wrong based on new information or gut; audit periodically to update taste profile; also catch-all for genuinely unclear placements;\nplayed — completed or bounced from;\nskip — not interested; game is deprioritized indefinitely" },
+              toCategory:   { type: "string", description: "One of: inbox, queue, caveats, decompression, yourCall, played, skip. Definitions:\ninbox — user-added games waiting for you to triage; always check this category first when the conversation starts and propose moves out of it into the right destination;\nqueue — no friction, ready to play, ranked by priority;\ncaveats — specific identified friction point, paired with risk level (low/medium/high);\ndecompression — low-investment wind-down, no narrative commitment required, not a lower tier;\nyourCall — mismatch signal holding pen; initial categorization feels wrong based on new information or gut; audit periodically to update taste profile; also catch-all for genuinely unclear placements;\nplayed — completed or bounced from;\nskip — not interested; game is deprioritized indefinitely" },
               rank:         { type: "integer", description: "Desired rank position within the target category (1 = highest priority). If omitted, appends to the end." },
               reason:       { type: "string", description: "Explanation for the suggested move" }
             },
@@ -169,12 +169,13 @@ function createMcpRouter() {
         },
         {
           name: "suggest_game_edit",
-          description: "Suggest changes to an existing game's mode (genre), hours estimate, or note",
+          description: "Suggest changes to an existing game's genre, risk level, hours estimate, or note",
           inputSchema: {
             type: "object",
             properties: {
               title:  { type: "string", description: "Exact game title as it appears in the library" },
-              mode:     { type: "string", description: "Corrected mode/genre: atmospheric, narrative, detective, tactical, immersive, action, strategy, puzzle, rpg" },
+              genre:    { type: "string", description: "Corrected genre: atmospheric, narrative, detective, tactical, immersive, action, strategy, puzzle, rpg" },
+              risk:     { type: "string", description: "Corrected risk level: low, medium, high (relevant for caveats category)" },
               hours:    { type: "string", description: "Corrected hours estimate e.g. '10' or '8-12'" },
               note:     { type: "string", description: "Replacement note for the game" },
               url:      { type: "string", description: "Store URL — Steam preferred when available, otherwise PlayStation Store" },
@@ -193,8 +194,8 @@ function createMcpRouter() {
             type: "object",
             properties: {
               title:    { type: "string" },
-              category: { type: "string", description: "Category to place the game in. Definitions:\ninbox — only used for games the user added themselves but hasn't asked you to triage; you generally do NOT suggest_new_game directly into inbox;\nqueue — no meaningful friction or risk flags; game is ready to play and ranked by priority; both short and long games belong here if the experience justifies the time;\ncaveats — game is wanted but has a specific identified friction point (mechanical difficulty, scope/obligation risk, ambiguous loss states, loop-first gameplay); always paired with a risk level (low/medium/high);\ndecompression — played in a low-investment no-narrative-commitment headspace; palate cleansers and wind-down sessions; NOT a lower quality tier, just a different mode of play;\nyourCall — mismatch signal holding pen: game was initially placed in caveats or decompression but something shifted (gut feeling, prior series experience, or post-play reaction) suggesting it belongs higher; the mismatch is data and should be used to refine the taste profile on audit; also used as catch-all when placement is genuinely unclear and a decision should not be forced" },
-              mode:     { type: "string", description: "atmospheric, narrative, detective, tactical, immersive, action, strategy, puzzle, rpg" },
+              category: { type: "string", description: "Category to place the game in. Definitions:\ninbox — only used for games the user added themselves but hasn't asked you to triage; you generally do NOT suggest_new_game directly into inbox;\nqueue — no meaningful friction or risk flags; game is ready to play and ranked by priority; both short and long games belong here if the experience justifies the time;\ncaveats — game is wanted but has a specific identified friction point (mechanical difficulty, scope/obligation risk, ambiguous loss states, loop-first gameplay); always paired with a risk level (low/medium/high);\ndecompression — played in a low-investment no-narrative-commitment headspace; palate cleansers and wind-down sessions; NOT a lower quality tier, just a different mode of play;\nyourCall — mismatch signal holding pen: game was initially placed in caveats or decompression but something shifted (gut feeling, prior series experience, or post-play reaction) suggesting it belongs higher; the mismatch is data and should be used to refine the taste profile on audit; also used as catch-all when placement is genuinely unclear and a decision should not be forced;\nskip — not interested; game is deprioritized indefinitely" },
+              genre:    { type: "string", description: "Genre: atmospheric, narrative, detective, tactical, immersive, action, strategy, puzzle, rpg" },
               risk:     { type: "string", description: "low, medium, high (for caveats category)" },
               hours:    { type: "string", description: "Estimated hours e.g. '10' or '8-12'" },
               note:     { type: "string", description: "Notes about the game and fit" },

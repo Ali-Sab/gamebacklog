@@ -20,6 +20,9 @@ try { db.exec("ALTER TABLE games ADD COLUMN platform TEXT"); } catch {}
 try { db.exec("ALTER TABLE games ADD COLUMN input TEXT"); } catch {}
 try { db.exec("ALTER TABLE games ADD COLUMN image_url TEXT"); } catch {}
 try { db.exec("ALTER TABLE credentials ADD COLUMN recovery_codes TEXT"); } catch {}
+try { db.exec("ALTER TABLE games RENAME COLUMN mode TO genre"); } catch (e) {
+  if (!e.message?.includes("no such column")) console.warn("[db] genre migration:", e.message);
+}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS games (
@@ -27,7 +30,7 @@ db.exec(`
     title       TEXT NOT NULL,
     category    TEXT NOT NULL,
     rank        INTEGER,
-    mode        TEXT,
+    genre       TEXT,
     risk        TEXT,
     hours       TEXT,
     note        TEXT,
@@ -136,12 +139,12 @@ db.exec(`
 
 // ─── Games ────────────────────────────────────────────────────────────────────
 
-const ALL_CATS = ['inbox', 'queue', 'caveats', 'decompression', 'yourCall', 'played'];
+const ALL_CATS = ['inbox', 'queue', 'caveats', 'decompression', 'yourCall', 'played', 'skip'];
 
 function rowToGame(row) {
   const g = { id: row.id, title: row.title };
   if (row.rank        != null) g.rank       = row.rank;
-  if (row.mode        != null) g.mode       = row.mode;
+  if (row.genre       != null) g.genre      = row.genre;
   if (row.risk        != null) g.risk       = row.risk;
   if (row.hours       != null) g.hours      = row.hours;
   if (row.note        != null) g.note       = row.note;
@@ -156,7 +159,7 @@ function rowToGame(row) {
 function gameToRow(g, category) {
   return {
     id: g.id, title: g.title, category,
-    rank: g.rank ?? null, mode: g.mode ?? null,
+    rank: g.rank ?? null, genre: g.genre ?? g.mode ?? null,
     risk: g.risk ?? null, hours: g.hours ?? null, note: g.note ?? null,
     played_date: g.playedDate ?? null,
     url: g.url ?? null,
@@ -178,11 +181,11 @@ function readGames() {
 }
 
 const upsertGame = db.prepare(`
-  INSERT INTO games (id, title, category, rank, mode, risk, hours, note, played_date, url, platform, input, image_url)
-  VALUES (@id, @title, @category, @rank, @mode, @risk, @hours, @note, @played_date, @url, @platform, @input, @image_url)
+  INSERT INTO games (id, title, category, rank, genre, risk, hours, note, played_date, url, platform, input, image_url)
+  VALUES (@id, @title, @category, @rank, @genre, @risk, @hours, @note, @played_date, @url, @platform, @input, @image_url)
   ON CONFLICT(id) DO UPDATE SET
     title=excluded.title, category=excluded.category, rank=excluded.rank,
-    mode=excluded.mode, risk=excluded.risk, hours=excluded.hours, note=excluded.note,
+    genre=excluded.genre, risk=excluded.risk, hours=excluded.hours, note=excluded.note,
     played_date=excluded.played_date, url=excluded.url,
     platform=excluded.platform, input=excluded.input, image_url=excluded.image_url
 `);

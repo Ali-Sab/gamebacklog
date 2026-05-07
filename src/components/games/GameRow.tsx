@@ -17,7 +17,7 @@ const RISK_COLORS_LIGHT: Record<string, string> = { low: "#1a6b40", medium: "#7a
 
 export const CAT_LABELS: Record<string, string> = {
   inbox: "Inbox", queue: "Play Queue", caveats: "With Caveats",
-  decompression: "Decompression", yourCall: "Your Call", played: "Played",
+  decompression: "Decompression", yourCall: "Your Call", played: "Played", skip: "Skip",
 };
 
 interface Props {
@@ -34,7 +34,7 @@ interface Props {
   onSaveNote: (id: string, cat: string, note: string) => void;
 }
 
-const MOVE_CATS = ["queue", "caveats", "decompression", "yourCall"];
+const MOVE_CATS = ["queue", "caveats", "decompression", "yourCall", "skip"];
 
 export function GameRow({ game, index, cat, cols, theme, isInbox, onMove, onPlayed, onEdit, onDelete, onSaveNote }: Props) {
   const [editingNote, setEditingNote] = useState(false);
@@ -45,7 +45,7 @@ export function GameRow({ game, index, cat, cols, theme, isInbox, onMove, onPlay
     setEditingNote(false);
   }
 
-  const modeColor = tagColor(MODES, MODES_LIGHT, game.mode || "", theme);
+  const genreColor = tagColor(MODES, MODES_LIGHT, game.genre || "", theme);
   const riskColor = game.risk ? tagColor(RISK_COLORS, RISK_COLORS_LIGHT, game.risk, theme) : "";
 
   return (
@@ -71,8 +71,8 @@ export function GameRow({ game, index, cat, cols, theme, isInbox, onMove, onPlay
       <div className="game-hours">{game.hours || "?"}h</div>
 
       <div>
-        {game.mode && (
-          <div><span className="tag" style={tagStyle(modeColor, theme)}>{game.mode}</span></div>
+        {game.genre && (
+          <div><span className="tag" style={tagStyle(genreColor, theme)}>{game.genre}</span></div>
         )}
         {game.risk && (
           <div><span className="tag" style={tagStyle(riskColor, theme)}>{game.risk} risk</span></div>
@@ -119,9 +119,12 @@ export function GameRow({ game, index, cat, cols, theme, isInbox, onMove, onPlay
         )}
         {!isInbox && (
           <select
-            value={cat}
+            value={MOVE_CATS.includes(cat) ? cat : ""}
             onChange={(e) => onMove(game.id, cat, e.target.value)}
           >
+            {!MOVE_CATS.includes(cat) && (
+              <option value="" disabled>{CAT_LABELS[cat] ?? cat}</option>
+            )}
             {MOVE_CATS.map((c) => (
               <option key={c} value={c}>{CAT_LABELS[c]}</option>
             ))}

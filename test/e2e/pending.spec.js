@@ -68,7 +68,7 @@ test("approve button calls approve endpoint and removes card", async ({ page }) 
     headers: { Authorization: `Bearer ${accessToken}` },
     data: {
       games: {
-        queue: [{ id: "hk-01", title: "Hollow Knight", mode: "atmospheric", risk: "", hours: "40", note: "" }],
+        queue: [{ id: "hk-01", title: "Hollow Knight", genre: "atmospheric", risk: "", hours: "40", note: "" }],
         caveats: [], decompression: [], yourCall: [], played: []
       },
       profile: [{ name: "CORE", text: "Test profile" }]
@@ -98,7 +98,7 @@ test("reject button removes the pending card", async ({ page }) => {
     status: "pending",
     createdAt: new Date().toISOString(),
     reason: "Suggested by Claude",
-    data: { title: "Disco Elysium", category: "queue", mode: "detective", risk: "", hours: "30", note: "" }
+    data: { title: "Disco Elysium", category: "queue", genre: "detective", risk: "", hours: "30", note: "" }
   });
 
   await page.click("button:has-text('Reject')");
@@ -184,7 +184,7 @@ test("approve-all button is hidden when queue is empty, visible whenever at leas
     status: "pending",
     createdAt: new Date().toISOString(),
     reason: "second",
-    data: { title: "Plus One", category: "decompression", mode: "puzzle", risk: "", hours: "3", note: "" }
+    data: { title: "Plus One", category: "decompression", genre: "puzzle", risk: "", hours: "3", note: "" }
   });
   await expect(page.locator("#approve-all-btn")).toBeVisible();
 });
@@ -197,7 +197,7 @@ test("approve-all button approves every pending item in one click", async ({ pag
     headers: { Authorization: `Bearer ${accessToken}` },
     data: {
       games: {
-        queue: [{ id: "ea1", title: "EA Move Me", mode: "rpg", risk: "", hours: "10", note: "" }],
+        queue: [{ id: "ea1", title: "EA Move Me", genre: "rpg", risk: "", hours: "10", note: "" }],
         caveats: [], decompression: [], yourCall: [], played: []
       },
       profile: [{ name: "BASE", text: "baseline." }]
@@ -210,7 +210,7 @@ test("approve-all button approves every pending item in one click", async ({ pag
   });
   await injectPending(page, {
     id: "aa-2", type: "new_game", status: "pending", createdAt: new Date().toISOString(),
-    reason: "fits", data: { title: "EA Brand New", category: "decompression", mode: "puzzle", risk: "", hours: "3", note: "" }
+    reason: "fits", data: { title: "EA Brand New", category: "decompression", genre: "puzzle", risk: "", hours: "3", note: "" }
   });
   await injectPending(page, {
     id: "aa-3", type: "profile_update", status: "pending", createdAt: new Date().toISOString(),
@@ -242,9 +242,9 @@ test("reorder card renders and approving applies new ranks", async ({ page }) =>
     data: {
       games: {
         queue: [
-          { id: "ro1", title: "RO Alpha",   mode: "rpg",      risk: "", hours: "10", note: "", rank: 1 },
-          { id: "ro2", title: "RO Bravo",   mode: "tactical", risk: "", hours: "12", note: "", rank: 2 },
-          { id: "ro3", title: "RO Charlie", mode: "action",   risk: "", hours: "8",  note: "", rank: 3 }
+          { id: "ro1", title: "RO Alpha",   genre: "rpg",      risk: "", hours: "10", note: "", rank: 1 },
+          { id: "ro2", title: "RO Bravo",   genre: "tactical", risk: "", hours: "12", note: "", rank: 2 },
+          { id: "ro3", title: "RO Charlie", genre: "action",   risk: "", hours: "8",  note: "", rank: 3 }
         ],
         caveats: [], decompression: [], yourCall: [], played: []
       },
@@ -275,6 +275,75 @@ test("reorder card renders and approving applies new ranks", async ({ page }) =>
   expect(byTitle["RO Charlie"]).toBe(1);
   expect(byTitle["RO Bravo"]).toBe(2);
   expect(byTitle["RO Alpha"]).toBe(3);
+});
+
+test("game_edit card renders and approve patches the game in place", async ({ page }) => {
+  const refreshRes = await page.request.post("/api/auth/refresh");
+  const { accessToken } = await refreshRes.json();
+  await page.request.post("/api/data", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    data: {
+      games: {
+        queue: [{ id: "ge1", title: "Edit Target", genre: "action", risk: "", hours: "10", note: "", platform: "pc", input: "kbm" }],
+        caveats: [], decompression: [], yourCall: [], played: []
+      },
+      profile: []
+    }
+  });
+
+  await injectPending(page, {
+    id: "ge-edit-1", type: "game_edit", status: "pending", createdAt: new Date().toISOString(),
+    reason: "Genre correction",
+    data: { title: "Edit Target", changes: { genre: "rpg", hours: "40" } }
+  });
+
+  await expect(page.locator("#pending-list")).toContainText("Edit Target");
+  await expect(page.locator("#pending-list")).toContainText("Game Edit");
+
+  await page.locator(`[data-testid="approve-ge-edit-1"]`).click();
+  await page.waitForResponse((r) => r.url().includes("/api/pending") && r.status() === 200);
+
+  const dataRes = await page.request.get("/api/data", { headers: { Authorization: `Bearer ${accessToken}` } });
+  const { games } = await dataRes.json();
+  const game = games.queue.find(g => g.title === "Edit Target");
+  expect(game).toBeDefined();
+  expect(game.genre).toBe("rpg");
+  expect(game.hours).toBe("40");
+});
+
+test("history shows approved items as well as rejected", async ({ page }) => {
+  const refreshRes = await page.request.post("/api/auth/refresh");
+  const { accessToken } = await refreshRes.json();
+  await page.request.post("/api/data", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    data: {
+      games: {
+        queue: [{ id: "ha1", title: "History Approve Game", genre: "rpg", risk: "", hours: "5", note: "", platform: "pc", input: "kbm" }],
+        caveats: [], decompression: [], yourCall: [], played: []
+      },
+      profile: []
+    }
+  });
+
+  await injectPending(page, {
+    id: "hist-approved-1", type: "game_move", status: "pending", createdAt: new Date().toISOString(),
+    reason: "Approved move",
+    data: { title: "History Approve Game", fromCategory: "queue", toCategory: "played" }
+  });
+  await injectPending(page, {
+    id: "hist-rejected-1", type: "profile_update", status: "pending", createdAt: new Date().toISOString(),
+    reason: "Rejected update",
+    data: { section: "HIST SECTION", change: "Some change." }
+  });
+
+  await page.locator(`[data-testid="approve-hist-approved-1"]`).click();
+  await page.waitForResponse((r) => r.url().includes("/api/pending") && r.status() === 200);
+  await page.locator(`[data-testid="reject-hist-rejected-1"]`).click();
+  await page.waitForResponse((r) => r.url().includes("/api/pending") && r.status() === 200);
+
+  await page.click("button:has-text('Show History')");
+  await expect(page.locator("#pending-history")).toContainText("History Approve Game");
+  await expect(page.locator("#pending-history")).toContainText("HIST SECTION");
 });
 
 test("MCP dedup: second suggestion for same game replaces first in pending.json", async ({ page }) => {

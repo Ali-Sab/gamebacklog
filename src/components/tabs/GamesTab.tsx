@@ -21,9 +21,9 @@ const MODES_LIGHT: Record<string, string> = {
 
 const CAT_COLORS: Record<string, string> = {
   inbox: "#c4b5fd", queue: "#7eb8d4", caveats: "#e8c547",
-  decompression: "#b8d47e", yourCall: "#e8a87c", played: "#a8a8a8",
+  decompression: "#b8d47e", yourCall: "#e8a87c", played: "#a8a8a8", skip: "#d4a8a8",
 };
-const ALL_CATS = ["inbox", "queue", "caveats", "decompression", "yourCall", "played"];
+const ALL_CATS = ["inbox", "queue", "caveats", "decompression", "yourCall", "played", "skip"];
 
 function parseHours(h?: string): number | null {
   const n = parseFloat((h || "").replace(/[~+∞]/g, "").split(/[–-]/)[0]);
@@ -48,10 +48,11 @@ interface Props {
 }
 
 export function GamesTab({ theme }: Props) {
-  const { state, setActiveCat, setModeFilter, setRiskFilter, setSortBy, setGlobalSearch, loadApp } = useApp();
+  const { state, setActiveCat, setGenreFilter, setRiskFilter, setSortBy, setGlobalSearch, loadApp } = useApp();
   const { showToast } = useToast();
   const [addOpen, setAddOpen] = useState(false);
-  const { games, activeCat, modeFilter, riskFilter, sortBy, globalSearch } = state;
+  const [searchEdit, setSearchEdit] = useState<{ game: Game; cat: string } | null>(null);
+  const { games, activeCat, genreFilter, riskFilter, sortBy, globalSearch } = state;
   const tabsRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -73,8 +74,8 @@ export function GamesTab({ theme }: Props) {
     return () => { el.removeEventListener("scroll", updateScrollState); ro.disconnect(); };
   }, [updateScrollState]);
 
-  function queueHours() {
-    return (games.queue || []).reduce((a, g) => {
+  function catHours(cat: string) {
+    return (games[cat] || []).reduce((a, g) => {
       const n = parseFloat((g.hours || "").replace(/[~+∞]/g, "").split("–")[0]);
       return a + (isNaN(n) ? 0 : n);
     }, 0);
@@ -82,17 +83,18 @@ export function GamesTab({ theme }: Props) {
 
   const sorted = sortGames(games[activeCat] || [], sortBy);
   const filtered = sorted.filter((g) => {
-    if (modeFilter && g.mode !== modeFilter) return false;
+    if (genreFilter && g.genre !== genreFilter) return false;
     if (riskFilter && g.risk !== riskFilter) return false;
     return true;
   });
 
-  // Global search results
+  // Global search results — iterate ALL_CATS for stable category order, sort by rank within each
   const searchResults: (Game & { _cat: string })[] = [];
   if (globalSearch) {
     const q = globalSearch.toLowerCase();
-    Object.entries(games).forEach(([cat, list]) => {
-      (list || []).forEach((g) => {
+    ALL_CATS.forEach((cat) => {
+      const list = [...(games[cat] || [])].sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
+      list.forEach((g) => {
         if (g.title.toLowerCase().includes(q) || (g.note || "").toLowerCase().includes(q)) {
           searchResults.push({ ...g, _cat: cat });
         }
@@ -139,24 +141,27 @@ export function GamesTab({ theme }: Props) {
               <div className="empty-state">No games found for "{globalSearch}"</div>
             ) : (
               <>
-                <div className="table-header" style={{ gridTemplateColumns: "1fr 54px 120px 1.6fr" }}>
-                  {["Game", "Hours", "Category", "Notes"].map((h) => <span key={h}>{h}</span>)}
+                <div className="table-header" style={{ gridTemplateColumns: "40px 1fr 54px 120px 1.6fr" }}>
+                  {["#", "Game", "Hours", "Category", "Notes"].map((h) => <span key={h}>{h}</span>)}
                 </div>
                 {searchResults.map((g) => {
                   const cc = CAT_COLORS[g._cat] || "#888";
                   const catLabel = CAT_LABELS[g._cat] || g._cat;
-                  const mc = MODES[g.mode || ""] || "#888";
+                  const mc = MODES[g.genre || ""] || "#888";
                   return (
                     <div
                       key={g.id}
                       className="game-row"
-                      style={{ gridTemplateColumns: "1fr 54px 120px 1.6fr", cursor: "pointer" }}
-                      onClick={() => { setGlobalSearch(""); setActiveCat(g._cat); }}
+                      style={{ gridTemplateColumns: "40px 1fr 54px 120px 1.6fr", cursor: "pointer" }}
+                      onClick={() => setSearchEdit({ game: g, cat: g._cat })}
                     >
+                      <div className={`game-rank${g.rank != null && g.rank <= 5 ? " top" : ""}`}>
+                        {g.rank != null ? String(g.rank).padStart(2, "0") : "–"}
+                      </div>
                       <div>
                         <div className="game-title">{g.title}</div>
-                        {g.mode && (
-                          <span className="tag" style={tagStyle(mc, theme)} >{g.mode}</span>
+                        {g.genre && (
+                          <span className="tag" style={tagStyle(mc, theme)} >{g.genre}</span>
                         )}
                       </div>
                       <div className="game-hours">{g.hours || "?"}h</div>
@@ -195,7 +200,7 @@ export function GamesTab({ theme }: Props) {
                 <span id={`cnt-${c}`}>({(games[c] || []).length})</span>
               </button>
             ))}
-            <span className="cat-meta" id="queue-hours-meta">~{Math.round(queueHours())}h in queue</span>
+            <span className="cat-meta" id="queue-hours-meta">~{Math.round(catHours("queue"))}h in queue</span>
           </div></div>
 
           {/* Inbox banner */}
@@ -212,11 +217,12 @@ export function GamesTab({ theme }: Props) {
           {/* Filters */}
           <GameFilters
             cat={activeCat}
-            modeFilter={modeFilter}
+            genreFilter={genreFilter}
             riskFilter={riskFilter}
             sortBy={sortBy}
             theme={theme}
-            onModeToggle={(m) => setModeFilter(modeFilter === m ? null : m)}
+            hours={catHours(activeCat)}
+            onGenreToggle={(m) => setGenreFilter(genreFilter === m ? null : m)}
             onRiskToggle={(r) => setRiskFilter(riskFilter === r ? null : r)}
             onSortChange={setSortBy}
           />
@@ -243,6 +249,24 @@ export function GamesTab({ theme }: Props) {
             })}
           </div>
         </>
+      )}
+
+      {/* Search result detail/edit modal */}
+      {searchEdit && (
+        <GameModal
+          title="Edit Game"
+          sub={`${CAT_LABELS[searchEdit.cat] || searchEdit.cat}${searchEdit.game.rank != null ? ` · Rank ${searchEdit.game.rank}` : ""}`}
+          initial={searchEdit.game}
+          onClose={() => setSearchEdit(null)}
+          onSubmit={async (fields) => {
+            if (!fields.title?.trim()) return false;
+            const { rank, ...rest } = fields;
+            const data = await api("PATCH", `/api/games/${searchEdit.game.id}`, rest);
+            if (data.error) { showToast(`Error: ${data.error as string}`); return false; }
+            await loadApp();
+            return true;
+          }}
+        />
       )}
 
       {/* Add Game modal */}

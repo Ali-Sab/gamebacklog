@@ -23,7 +23,7 @@ export function GameTable({ games, cat, theme }: Props) {
 
   const isInbox = cat === "inbox";
   const cols = isInbox ? "1fr 54px minmax(100px, auto) 1.6fr 110px" : "54px 1fr 54px minmax(100px, auto) 1.6fr 110px";
-  const headers = isInbox ? ["Game", "Hours", "Mode", "Notes", ""] : ["#", "Game", "Hours", "Mode", "Notes", ""];
+  const headers = isInbox ? ["Game", "Hours", "Genre", "Notes", ""] : ["#", "Game", "Hours", "Genre", "Notes", ""];
 
   async function handleMove(id: string, fromCat: string, toCat: string) {
     const result = await moveGame(id, fromCat, toCat);
