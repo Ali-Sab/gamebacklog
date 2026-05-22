@@ -1,11 +1,15 @@
 let _accessToken: string | null = null;
-let _csrfToken: string | null = null;
-let _refreshing = false;
+let _fetching = false;
 
 export function setAccessToken(t: string | null) { _accessToken = t; }
 export function getAccessToken() { return _accessToken; }
-export function setCsrfToken(t: string | null) { _csrfToken = t; }
-export function getCsrfToken() { return _csrfToken; }
+
+const ACCOUNT_MANAGER_URL = import.meta.env.VITE_ACCOUNT_MANAGER_URL || "";
+
+export function redirectToLogin() {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  window.location.href = `${base}/auth/login`;
+}
 
 export async function api(
   method: string,
@@ -16,29 +20,33 @@ export async function api(
 ): Promise<Record<string, unknown>> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (auth && _accessToken) headers["Authorization"] = `Bearer ${_accessToken}`;
-  if (_csrfToken && method !== "GET" && method !== "HEAD") headers["X-CSRF-Token"] = _csrfToken;
 
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-  const url = path.startsWith("/") ? `${base}${path}` : path;
-  const res = await fetch(url, {
+  const url  = path.startsWith("/") ? `${base}${path}` : path;
+  const res  = await fetch(url, {
     method,
     headers,
     credentials: "include",
     body: body != null ? JSON.stringify(body) : undefined,
   });
 
-  // 401 on an authenticated request: try one token refresh then retry once
-  if (res.status === 401 && auth && !_isRetry && !_refreshing) {
-    _refreshing = true;
+  // On 401, try fetching a fresh token from the cookie once, then redirect to login
+  if (res.status === 401 && auth && !_isRetry && !_fetching) {
+    _fetching = true;
     try {
-      const refreshed = await api("POST", "/api/auth/refresh", undefined, false);
-      if (typeof refreshed.accessToken === "string") {
-        _accessToken = refreshed.accessToken;
-        _refreshing = false;
-        return api(method, path, body, auth, true);
+      const sessionRes = await fetch(`${base}/auth/session`, { credentials: "include" });
+      if (sessionRes.ok) {
+        const data = await sessionRes.json() as { accessToken?: string };
+        if (data.accessToken) {
+          _accessToken = data.accessToken;
+          _fetching = false;
+          return api(method, path, body, auth, true);
+        }
       }
     } catch { /* fall through */ }
-    _refreshing = false;
+    _fetching = false;
+    redirectToLogin();
+    return {};
   }
 
   if (!res.ok && !res.headers.get("content-type")?.includes("application/json")) {
@@ -47,9 +55,6 @@ export async function api(
   return res.json() as Promise<Record<string, unknown>>;
 }
 
-export async function fetchCsrfToken(): Promise<void> {
-  try {
-    const data = await api("GET", "/api/auth/csrf", undefined, false);
-    if (typeof data.csrfToken === "string") _csrfToken = data.csrfToken;
-  } catch { /* ignore */ }
+export function getAccountManagerUrl() {
+  return ACCOUNT_MANAGER_URL;
 }

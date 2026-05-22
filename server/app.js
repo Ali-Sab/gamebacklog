@@ -8,7 +8,6 @@ require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 const express      = require("express");
 const cookieParser = require("cookie-parser");
 const { createMcpRouter } = require("./mcp-server");
-const { computeTOTP, hashPassword, verifyTOTP, generateSecret } = require("./lib/crypto");
 
 const app  = express();
 app.set("trust proxy", 1); // trust first proxy (Nginx / Tailscale Funnel)
@@ -32,13 +31,15 @@ app.use((req, res, next) => {
   next();
 });
 
-// ─── OAuth routes (mounted at root — no prefix, paths are /.well-known/... and /oauth/...) ──
-app.use("/", require("./routes/oauth"));
+// ─── Auth flow routes (login redirect + OAuth callback, at root paths) ───────
+const authRouter = require("./routes/auth");
+app.use("/", authRouter);
+app.use(`${BASE_PATH}`, authRouter);
 
 // ─── API routes ───────────────────────────────────────────────────────────────
 // Mounted at both paths: /api (nginx-stripped) and /gamebacklog/api (direct access)
 for (const prefix of ["/api", `${BASE_PATH}/api`]) {
-  app.use(prefix, require("./routes/auth"));
+  app.use(prefix, authRouter);
   app.use(prefix, require("./routes/games"));
   app.use(prefix, require("./routes/pending"));
   app.use(prefix, require("./routes/data"));
@@ -66,4 +67,4 @@ if (SERVE_STATIC) {
   });
 }
 
-module.exports = { app, computeTOTP, hashPassword, verifyTOTP, generateSecret };
+module.exports = { app };

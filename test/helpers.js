@@ -8,38 +8,11 @@ function tmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "gamebacklog-test-"));
 }
 
-// Complete setup flow — returns { secret, recoveryCodes }
-async function setupUser(request, app, computeTOTP, { username = "tester", password = "password123" } = {}) {
-  const { body } = await request(app).get("/api/setup/secret").expect(200);
-  const { secret } = body;
-  const res = await request(app)
-    .post("/api/setup")
-    .send({ username, password, totpCode: computeTOTP(secret) })
-    .expect(200);
-  return { secret, recoveryCodes: res.body.recoveryCodes || [] };
-}
-
-// Login with username + password + TOTP; returns { accessToken, cookie, csrfToken }
-async function login(request, app, secret, computeTOTP, { username = "tester", password = "password123" } = {}) {
-  const step1 = await request(app)
-    .post("/api/auth/login")
-    .send({ username, password })
-    .expect(200);
-  const step2 = await request(app)
-    .post("/api/auth/mfa")
-    .send({ mfaToken: step1.body.mfaToken, code: computeTOTP(secret) })
-    .expect(200);
-  return {
-    accessToken: step2.body.accessToken,
-    csrfToken:   step2.body.csrfToken,
-    cookie:      step2.headers["set-cookie"],
-  };
-}
-
-// Shorthand: setup + login in one call
-async function setupAndLogin(request, app, computeTOTP, opts = {}) {
-  const { secret } = await setupUser(request, app, computeTOTP, opts);
-  return login(request, app, secret, computeTOTP, opts);
+// In tests (JWT_SECRET set), get an access token directly without the auth flow.
+// Auth routes (login/setup/MFA) now live in account-manager, not game backlog.
+function setupAndLogin() {
+  const { signAccessForTest } = require("../server/lib/crypto");
+  return { accessToken: signAccessForTest("tester") };
 }
 
 // In-memory readJSON / writeJSON for MCP unit tests
@@ -51,4 +24,4 @@ function makeStore(files = {}) {
   return { readJSON, writeJSON, store };
 }
 
-module.exports = { tmpDir, setupUser, login, setupAndLogin, makeStore };
+module.exports = { tmpDir, setupAndLogin, makeStore };

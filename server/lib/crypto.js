@@ -1,66 +1,65 @@
 "use strict";
 
-const crypto = require("crypto");
-const jwt    = require("jsonwebtoken");
-const { generateSync: _otpGenerate, verifySync: _otpVerify, generateSecret: _otpSecret } = require("otplib");
-const { createGuardrails: _createGuardrails } = require("@otplib/core");
+const fs  = require("fs");
+const jwt = require("jsonwebtoken");
+const path = require("path");
 
-// Relax minimum secret length — existing secrets may be 10 bytes (pre-v13 default).
-const _otpGuardrails = { ..._createGuardrails(), MIN_SECRET_BYTES: 0 };
+// Public key used to verify RS256 tokens issued by account-manager.
+// Either point PUBLIC_KEY_PATH at the PEM file, or set ACCOUNT_MANAGER_JWKS_URI
+// for automatic fetching (requires a startup async init — see loadPublicKey).
+let _publicKey = null;
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-in-production";
-
-if (process.env.NODE_ENV === "production" && JWT_SECRET === "dev-secret-change-in-production") {
-  throw new Error("JWT_SECRET must be set in production — generate with: node -e \"console.log(require('crypto').randomBytes(64).toString('hex'))\"");
+function getPublicKey() {
+  if (_publicKey) return _publicKey;
+  const keyPath = process.env.PUBLIC_KEY_PATH ||
+    process.env.ACCOUNT_MANAGER_PUBLIC_KEY_PATH ||
+    path.resolve(__dirname, "..", "..", "account-manager", "data", "keys", "public.pem");
+  if (!fs.existsSync(keyPath)) {
+    throw new Error(`RS256 public key not found at ${keyPath}. Set PUBLIC_KEY_PATH or run account-manager setup.`);
+  }
+  _publicKey = fs.readFileSync(keyPath, "utf8");
+  return _publicKey;
 }
 
-function hashPassword(password, salt) {
-  return new Promise((res, rej) =>
-    crypto.pbkdf2(password, salt, 310000, 64, "sha512",
-      (err, key) => err ? rej(err) : res(key.toString("hex")))
-  );
+function getIssuer() {
+  return process.env.ACCOUNT_MANAGER_ISSUER || process.env.JWT_ISSUER || "http://localhost:3001";
 }
 
-// TOTP via otplib (RFC 6238). 30s step, ±1 window for clock drift.
-function computeTOTP(secret, offset = 0) {
-  const epoch = Math.floor(Date.now() / 1000) + offset * 30;
-  return _otpGenerate({ secret, epoch, guardrails: _otpGuardrails });
-}
+// In test mode (JWT_SECRET set), accept HS256 tokens so existing test helpers still work.
+const TEST_SECRET = process.env.JWT_SECRET;
 
-function verifyTOTP(secret, code) {
-  const c = (code || "").replace(/\s/g, "");
-  if (c.length !== 6) return false;
-  return _otpVerify({ secret, token: c, epochTolerance: 30, guardrails: _otpGuardrails }).valid;
-}
-
-function generateSecret() {
-  return _otpSecret(20); // 20 bytes → 32-char base32
-}
-
-function newRecoveryCode() {
-  // 10 hex chars, formatted like "a3f4-b2c1-9e" for readability
-  const raw = crypto.randomBytes(5).toString("hex");
-  return `${raw.slice(0,4)}-${raw.slice(4,8)}-${raw.slice(8,10)}`;
-}
-
-async function generateRecoveryCodes(salt, n = 8) {
-  const plain = Array.from({ length: n }, newRecoveryCode);
-  const hashes = await Promise.all(plain.map(c => hashPassword(c, salt)));
-  return { plain, hashes };
-}
-
-function signAccess(username) {
-  return jwt.sign({ sub: username }, JWT_SECRET, { expiresIn: "1h" });
-}
-
+// Verifies an RS256 access token issued by account-manager for the 'gamebacklog' audience.
 function verifyAccess(token) {
-  try { return jwt.verify(token, JWT_SECRET); }
-  catch { return null; }
+  if (TEST_SECRET) {
+    try { return jwt.verify(token, TEST_SECRET); } catch { return null; }
+  }
+  try {
+    return jwt.verify(token, getPublicKey(), {
+      algorithms: ["RS256"],
+      audience:   "gamebacklog",
+      issuer:     getIssuer(),
+    });
+  } catch { return null; }
 }
 
-module.exports = {
-  JWT_SECRET,
-  hashPassword, computeTOTP, verifyTOTP, generateSecret,
-  newRecoveryCode, generateRecoveryCodes,
-  signAccess, verifyAccess,
-};
+// Verifies an RS256 token issued by account-manager for the 'mcp' audience.
+function verifyMcpToken(token) {
+  if (TEST_SECRET) {
+    try { return jwt.verify(token, TEST_SECRET); } catch { return null; }
+  }
+  try {
+    return jwt.verify(token, getPublicKey(), {
+      algorithms: ["RS256"],
+      audience:   "mcp",
+      issuer:     getIssuer(),
+    });
+  } catch { return null; }
+}
+
+// In test mode only: sign a token with HS256 for use by test helpers.
+function signAccessForTest(username) {
+  if (!TEST_SECRET) throw new Error("signAccessForTest only available in test mode (JWT_SECRET)");
+  return jwt.sign({ sub: username }, TEST_SECRET, { expiresIn: "1h" });
+}
+
+module.exports = { verifyAccess, verifyMcpToken, signAccessForTest };

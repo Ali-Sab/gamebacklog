@@ -10,14 +10,14 @@ process.env.DATA_DIR   = DATA_DIR;
 process.env.JWT_SECRET = "test-jwt-secret";
 process.env.NODE_ENV   = "test";
 
-const { app, computeTOTP } = require("../server/app");
+const { app } = require("../server/app");
 const { execTool }         = require("../server/mcp-server");
 const { setupAndLogin, makeStore } = require("./helpers");
 
 let token;
 
 beforeAll(async () => {
-  const result = await setupAndLogin(request, app, computeTOTP);
+  const result = setupAndLogin();
   token = result.accessToken;
 
   // Seed a game library so move/approve tests have something to work with

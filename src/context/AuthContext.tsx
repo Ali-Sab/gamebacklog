@@ -1,72 +1,48 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import {
-  api,
-  fetchCsrfToken,
-  setAccessToken,
-  getAccessToken,
-  setCsrfToken,
-} from "../api";
+import { api, setAccessToken, redirectToLogin } from "../api";
 
-type Screen = "loading" | "setup" | "login" | "main";
+type Screen = "loading" | "main";
 
 interface AuthContextValue {
   currentScreen: Screen;
-  loginHasPasskeys: boolean;
-  login: (accessToken: string, csrfToken?: string) => Promise<void>;
-  logout: () => Promise<void>;
-  setScreen: (s: Screen) => void;
+  logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children, onMain }: { children: ReactNode; onMain: () => void }) {
   const [currentScreen, setCurrentScreen] = useState<Screen>("loading");
-  const [loginHasPasskeys, setLoginHasPasskeys] = useState(false);
 
-  useEffect(() => {
-    boot();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { boot(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function boot() {
     try {
-      const status = await api("GET", "/api/setup/status", undefined, false);
-      if (!status.configured) { setCurrentScreen("setup"); return; }
-
-      await fetchCsrfToken();
-      setLoginHasPasskeys(!!status.hasPasskeys);
-
-      const data = await api("POST", "/api/auth/refresh", undefined, false);
-      if (typeof data.accessToken === "string") {
-        setAccessToken(data.accessToken);
-        setCurrentScreen("main");
-        onMain();
-      } else {
-        setCurrentScreen("login");
+      // Retrieve access token stored in the httpOnly cookie via the session endpoint
+      const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+      const res  = await fetch(`${base}/auth/session`, { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json() as { accessToken?: string };
+        if (data.accessToken) {
+          setAccessToken(data.accessToken);
+          setCurrentScreen("main");
+          onMain();
+          return;
+        }
       }
-    } catch (e) {
-      console.error("Boot error:", e);
-      setCurrentScreen("login");
-    }
+    } catch { /* fall through */ }
+    redirectToLogin();
   }
 
-  async function login(accessToken: string, csrfToken?: string) {
-    setAccessToken(accessToken);
-    if (csrfToken) setCsrfToken(csrfToken);
-    setCurrentScreen("main");
-    onMain();
-  }
-
-  async function logout() {
-    await api("POST", "/api/auth/logout").catch((e) => console.error("Logout error:", e));
+  function logout() {
     setAccessToken(null);
-    setCsrfToken(null);
-    setCurrentScreen("login");
+    // Clear the cookie server-side then redirect to account-manager
+    const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+    fetch(`${base}/api/auth/logout`, { method: "POST", credentials: "include" })
+      .finally(() => { redirectToLogin(); });
   }
 
   return (
-    <AuthContext.Provider
-      value={{ currentScreen, loginHasPasskeys, login, logout, setScreen: setCurrentScreen }}
-    >
+    <AuthContext.Provider value={{ currentScreen, logout }}>
       {children}
     </AuthContext.Provider>
   );
