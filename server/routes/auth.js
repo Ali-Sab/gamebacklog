@@ -7,6 +7,7 @@ const express = require("express");
 const rateLimit = require("express-rate-limit");
 const router  = express.Router();
 
+<<<<<<< Updated upstream
 const {
   JWT_SECRET, hashPassword, verifyTOTP, generateSecret,
   generateRecoveryCodes, signAccess,
@@ -22,6 +23,45 @@ const {
   readSetupState, writeSetupState,
   db,
 } = require("../db");
+=======
+const ACCOUNT_MANAGER_URL   = process.env.ACCOUNT_MANAGER_URL || "http://localhost:3001";
+const ACCOUNT_MANAGER_TOKEN = `${ACCOUNT_MANAGER_URL}/token`;
+// Accept OAUTH_* (infra convention) with GAMEBACKLOG_* as fallback (dev .env legacy)
+const CLIENT_ID     = process.env.OAUTH_CLIENT_ID     || process.env.GAMEBACKLOG_CLIENT_ID     || "";
+const CLIENT_SECRET = process.env.OAUTH_CLIENT_SECRET || process.env.GAMEBACKLOG_CLIENT_SECRET || "";
+const REDIRECT_URI  = process.env.OAUTH_REDIRECT_URI  || process.env.GAMEBACKLOG_REDIRECT_URI  || "http://localhost:3010/auth/callback";
+
+// Derive our own login URL from REDIRECT_URI (same origin, /auth/login path).
+let POST_LOGOUT_REDIRECT_URI = "http://localhost:3010/auth/login";
+try {
+  const u = new URL(REDIRECT_URI);
+  POST_LOGOUT_REDIRECT_URI = `${u.origin}/auth/login`;
+} catch { /* keep default */ }
+
+// Fetch end_session_endpoint from account-manager's discovery document at startup.
+// Falls back to the conventional path if discovery is unavailable.
+let endSessionEndpoint = `${ACCOUNT_MANAGER_URL}/logout`;
+fetch(`${ACCOUNT_MANAGER_URL}/.well-known/oauth-authorization-server`)
+  .then(r => r.json())
+  .then(data => {
+    if (data.end_session_endpoint) {
+      // Rewrite hostname/port to match ACCOUNT_MANAGER_URL so the browser can reach it.
+      // The discovery doc may return a Docker-internal host (e.g. account-manager-test:3001)
+      // while the browser needs the host-visible URL (e.g. localhost:3099).
+      try {
+        const discovered = new URL(data.end_session_endpoint);
+        const amBase     = new URL(ACCOUNT_MANAGER_URL);
+        discovered.protocol = amBase.protocol;
+        discovered.hostname  = amBase.hostname;
+        discovered.port      = amBase.port;
+        endSessionEndpoint = discovered.toString();
+      } catch {
+        endSessionEndpoint = data.end_session_endpoint;
+      }
+    }
+  })
+  .catch(() => { /* keep fallback */ });
+>>>>>>> Stashed changes
 
 const IS_PROD          = process.env.NODE_ENV === "production";
 const WEBAUTHN_RP_ID   = process.env.WEBAUTHN_RP_ID   || "localhost";
@@ -136,8 +176,20 @@ router.post("/setup", authLimiter, async (req, res) => {
       totpSecret: pending.secret,
       recoveryCodes: hashes,
     });
+<<<<<<< Updated upstream
     writePendingSetup(null);
     res.json({ ok: true, recoveryCodes: plain });
+=======
+
+    // Redirect to the app root, derived from REDIRECT_URI so it works whether
+    // the app is served at / or under a subpath like /gamebacklog/.
+    let home = "/";
+    try {
+      const u = new URL(REDIRECT_URI);
+      home = u.pathname.replace(/\/auth\/callback$/, "/") || "/";
+    } catch { /* use "/" */ }
+    res.redirect(home);
+>>>>>>> Stashed changes
   } catch (e) {
     console.error("Setup error:", e);
     res.status(500).json({ error: "Setup failed" });
@@ -182,6 +234,7 @@ router.post("/auth/mfa", authLimiter, (req, res) => {
   }
 });
 
+<<<<<<< Updated upstream
 router.post("/auth/recovery", authLimiter, async (req, res) => {
   try {
     const { mfaToken, code } = req.body;
@@ -441,6 +494,12 @@ router.delete("/webauthn/credentials/:id", requireAuth, (req, res) => {
   }
   deletePasskeyCredential(decodeURIComponent(req.params.id));
   res.json({ ok: true });
+=======
+router.post("/auth/logout", (req, res) => {
+  res.clearCookie("accessToken", { path: "/" });
+  const params = new URLSearchParams({ post_logout_redirect_uri: POST_LOGOUT_REDIRECT_URI });
+  res.json({ ok: true, endSessionUrl: `${endSessionEndpoint}?${params}` });
+>>>>>>> Stashed changes
 });
 
 module.exports = router;

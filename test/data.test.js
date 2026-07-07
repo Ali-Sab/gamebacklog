@@ -6,9 +6,8 @@ const path    = require("path");
 const request = require("supertest");
 
 const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "gamebacklog-test-"));
-process.env.DATA_DIR   = DATA_DIR;
-process.env.JWT_SECRET = "test-jwt-secret";
-process.env.NODE_ENV   = "test";
+process.env.DATA_DIR = DATA_DIR;
+process.env.NODE_ENV = "test";
 
 const { app, computeTOTP } = require("../server/app");
 const { setupAndLogin }    = require("./helpers");

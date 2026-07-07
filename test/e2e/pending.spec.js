@@ -62,7 +62,7 @@ test("pending card is rendered for a game_move suggestion", async ({ page }) => 
 
 test("approve button calls approve endpoint and removes card", async ({ page }) => {
   // Seed a game so approve can actually move it
-  const refreshRes = await page.request.post("/api/auth/refresh");
+  const refreshRes = await page.request.get("/api/auth/session");
   const { accessToken } = await refreshRes.json();
   await page.request.post("/api/data", {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -191,7 +191,7 @@ test("approve-all button is hidden when queue is empty, visible whenever at leas
 
 test("approve-all button approves every pending item in one click", async ({ page }) => {
   // Seed library so move/edit have something to act on
-  const refreshRes = await page.request.post("/api/auth/refresh");
+  const refreshRes = await page.request.get("/api/auth/session");
   const { accessToken } = await refreshRes.json();
   await page.request.post("/api/data", {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -235,7 +235,7 @@ test("approve-all button approves every pending item in one click", async ({ pag
 });
 
 test("reorder card renders and approving applies new ranks", async ({ page }) => {
-  const refreshRes = await page.request.post("/api/auth/refresh");
+  const refreshRes = await page.request.get("/api/auth/session");
   const { accessToken } = await refreshRes.json();
   await page.request.post("/api/data", {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -278,7 +278,7 @@ test("reorder card renders and approving applies new ranks", async ({ page }) =>
 });
 
 test("game_edit card renders and approve patches the game in place", async ({ page }) => {
-  const refreshRes = await page.request.post("/api/auth/refresh");
+  const refreshRes = await page.request.get("/api/auth/session");
   const { accessToken } = await refreshRes.json();
   await page.request.post("/api/data", {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -312,7 +312,7 @@ test("game_edit card renders and approve patches the game in place", async ({ pa
 });
 
 test("history shows approved items as well as rejected", async ({ page }) => {
-  const refreshRes = await page.request.post("/api/auth/refresh");
+  const refreshRes = await page.request.get("/api/auth/session");
   const { accessToken } = await refreshRes.json();
   await page.request.post("/api/data", {
     headers: { Authorization: `Bearer ${accessToken}` },

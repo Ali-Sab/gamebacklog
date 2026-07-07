@@ -35,6 +35,7 @@ export function TopBar({ activeTab, onTabChange }: Props) {
             )}
           </button>
         ))}
+        <a href="/accounts/" className="nav-btn account-link" style={{ textDecoration: "none" }}>My Account</a>
       </nav>
     </div>
   );

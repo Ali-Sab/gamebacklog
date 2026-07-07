@@ -1,52 +1,45 @@
 "use strict";
 
-const fs     = require("fs");
-const crypto = require("crypto");
 const { chromium } = require("@playwright/test");
-const { PORT, DATA_DIR, AUTH_STATE_FILE, USERNAME, PASSWORD, TOTP_SECRET } = require("./constants");
+const { PORT, AUTH_STATE_FILE, ACCOUNT_MANAGER_URL, USERNAME, PASSWORD, TOTP_SECRET } = require("./constants");
 const { computeTOTP } = require("./totp");
 
-function hashPassword(password, salt) {
-  return new Promise((res, rej) =>
-    crypto.pbkdf2(password, salt, 310000, 64, "sha512",
-      (err, key) => err ? rej(err) : res(key.toString("hex")))
-  );
-}
-
 module.exports = async function globalSetup() {
-  // DATA_DIR was wiped and recreated by e2e/server.js before webServer launched.
-  // Open a second SQLite connection to the same file and write credentials.
-  // WAL mode allows concurrent readers/writers so the server process sees the write.
-  process.env.DATA_DIR = DATA_DIR;
-  const { writeCredentials } = require("../../server/db");
+  if (!TOTP_SECRET) {
+    throw new Error(
+      "E2E_TOTP_SECRET is not set. Run 'make setup-test-env' in homelab-infra first, " +
+      "then use 'make test-e2e-gamebacklog' to pass credentials automatically."
+    );
+  }
 
-  const salt = crypto.randomBytes(16).toString("hex");
-  const hash = await hashPassword(PASSWORD, salt);
-  writeCredentials({ username: USERNAME, hash, salt, totpSecret: TOTP_SECRET });
-
-  // Browser login to capture auth storage state
   const browser = await chromium.launch();
   const context = await browser.newContext();
   const page    = await context.newPage();
 
+  // Navigate to the app — React will call /auth/session, get 401, and redirect to /auth/login,
+  // which the server turns into a redirect to account-manager's /authorize endpoint.
   await page.goto(`http://localhost:${PORT}/gamebacklog`);
 
-  await page.waitForSelector('[data-testid="screen-login"]', { timeout: 10000 });
-  await page.fill('[data-testid="login-username"]', USERNAME);
-  await page.fill('[data-testid="login-password"]', PASSWORD);
-  await page.click('[data-testid="login-submit-step1"]');
+  // Wait for account-manager's login form — this covers the full redirect chain and
+  // ensures the form content is ready before we try to interact with it.
+  await page.waitForSelector('input[name="username"]', { timeout: 20000 });
 
-  await page.waitForSelector('[data-testid="login-totp"]');
-  await page.fill('[data-testid="login-totp"]', computeTOTP(TOTP_SECRET));
-  await page.click('button:has-text("Verify")');
+  // Fill in the account-manager OAuth login form.
+  await page.fill('input[name="username"]', USERNAME);
+  await page.fill('input[name="password"]', PASSWORD);
+  await page.fill('input[name="totp"]', computeTOTP(TOTP_SECRET));
+  await page.click('button[name="decision"][value="allow"]');
 
-  const err = page.locator('[data-testid="login-error2"]');
-  if (await err.isVisible({ timeout: 1500 }).catch(() => false)) {
-    await page.fill('[data-testid="login-totp"]', computeTOTP(TOTP_SECRET, 1));
-    await page.click('button:has-text("Verify")');
+  // If TOTP was at a boundary, the code may have expired — retry with next window.
+  const currentUrl = page.url();
+  if (currentUrl.includes(`${ACCOUNT_MANAGER_URL}/authorize`)) {
+    await page.fill('input[name="totp"]', computeTOTP(TOTP_SECRET, 1));
+    await page.click('button[name="decision"][value="allow"]');
   }
 
-  await page.waitForSelector('[data-testid="screen-main"]', { timeout: 10000 });
+  // Account-manager redirects back to gamebacklog's /auth/callback, which exchanges the
+  // code for a token, sets the accessToken cookie, and redirects to the app root.
+  await page.waitForSelector('[data-testid="screen-main"]', { timeout: 15000 });
 
   await context.storageState({ path: AUTH_STATE_FILE });
   await browser.close();

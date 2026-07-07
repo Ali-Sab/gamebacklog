@@ -59,8 +59,22 @@ export function AuthProvider({ children, onMain }: { children: ReactNode; onMain
   async function logout() {
     await api("POST", "/api/auth/logout").catch((e) => console.error("Logout error:", e));
     setAccessToken(null);
+<<<<<<< Updated upstream
     setCsrfToken(null);
     setCurrentScreen("login");
+=======
+    const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+    fetch(`${base}/api/auth/logout`, { method: "POST", credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { endSessionUrl?: string } | null) => {
+        if (data?.endSessionUrl) {
+          window.location.href = data.endSessionUrl;
+        } else {
+          redirectToLogin();
+        }
+      })
+      .catch(() => { redirectToLogin(); });
+>>>>>>> Stashed changes
   }
 
   return (

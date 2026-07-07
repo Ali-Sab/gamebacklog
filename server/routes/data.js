@@ -5,14 +5,38 @@ const router  = express.Router();
 const { db, readGames, writeGames, readProfile, writeProfile } = require("../db");
 const requireAuth = require("../middleware/requireAuth");
 
+const ACCOUNT_MANAGER_URL  = process.env.ACCOUNT_MANAGER_URL  || "http://localhost:3001";
+const OAUTH_CLIENT_ID      = process.env.OAUTH_CLIENT_ID      || process.env.GAMEBACKLOG_CLIENT_ID      || "";
+const OAUTH_CLIENT_SECRET  = process.env.OAUTH_CLIENT_SECRET  || process.env.GAMEBACKLOG_CLIENT_SECRET  || "";
+const OAUTH_REDIRECT_URI   = process.env.OAUTH_REDIRECT_URI   || process.env.GAMEBACKLOG_REDIRECT_URI   || "";
+
 // MCP connection info for display in settings
-router.get("/mcp-url", requireAuth, (req, res) => {
+router.get("/mcp-url", requireAuth, async (req, res) => {
   const proto = req.headers["x-forwarded-proto"] || req.protocol;
   const host  = req.headers["x-forwarded-host"]  || req.get("host");
+
+  let mcpClientId = "", mcpClientSecret = "";
+  try {
+    const r = await fetch(`${ACCOUNT_MANAGER_URL}/api/mcp-client`, {
+      method: "POST",
+      headers: {
+        "Authorization": "Basic " + Buffer.from(`${OAUTH_CLIENT_ID}:${OAUTH_CLIENT_SECRET}`).toString("base64"),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ redirect_uri: OAUTH_REDIRECT_URI }),
+    });
+    if (r.ok) {
+      const data = await r.json();
+      mcpClientId     = data.client_id     || "";
+      mcpClientSecret = data.client_secret || "";
+    }
+  } catch { /* account-manager unreachable — leave blank */ }
+
   res.json({
-    url:          `${proto}://${host}/mcp`,
-    clientId:     process.env.OAUTH_CLIENT_ID     || "",
-    clientSecret: process.env.OAUTH_CLIENT_SECRET || "",
+    url:               `${proto}://${host}/mcp`,
+    clientId:          mcpClientId,
+    clientSecret:      mcpClientSecret,
+    accountManagerUrl: ACCOUNT_MANAGER_URL,
   });
 });
 

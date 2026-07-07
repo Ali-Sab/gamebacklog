@@ -21,7 +21,8 @@ try { db.exec("ALTER TABLE games ADD COLUMN input TEXT"); } catch {}
 try { db.exec("ALTER TABLE games ADD COLUMN image_url TEXT"); } catch {}
 try { db.exec("ALTER TABLE credentials ADD COLUMN recovery_codes TEXT"); } catch {}
 try { db.exec("ALTER TABLE games RENAME COLUMN mode TO genre"); } catch (e) {
-  if (!e.message?.includes("no such column")) console.warn("[db] genre migration:", e.message);
+  if (!e.message?.includes("no such column") && !e.message?.includes("no such table"))
+    console.warn("[db] genre migration:", e.message);
 }
 
 db.exec(`

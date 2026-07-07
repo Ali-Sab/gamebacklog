@@ -9,7 +9,7 @@ function withDefaults(list) {
 }
 
 async function seedGames(page, games) {
-  const res = await page.request.post("/api/auth/refresh");
+  const res = await page.request.get("/api/auth/session");
   const { accessToken } = await res.json();
   const normalized = Object.fromEntries(
     Object.entries(games).map(([cat, list]) => [cat, withDefaults(list)])

@@ -4,8 +4,16 @@ let _refreshing = false;
 
 export function setAccessToken(t: string | null) { _accessToken = t; }
 export function getAccessToken() { return _accessToken; }
+<<<<<<< Updated upstream
 export function setCsrfToken(t: string | null) { _csrfToken = t; }
 export function getCsrfToken() { return _csrfToken; }
+=======
+
+export function redirectToLogin() {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  window.location.href = `${base}/auth/login`;
+}
+>>>>>>> Stashed changes
 
 export async function api(
   method: string,
@@ -47,9 +55,12 @@ export async function api(
   return res.json() as Promise<Record<string, unknown>>;
 }
 
+<<<<<<< Updated upstream
 export async function fetchCsrfToken(): Promise<void> {
   try {
     const data = await api("GET", "/api/auth/csrf", undefined, false);
     if (typeof data.csrfToken === "string") _csrfToken = data.csrfToken;
   } catch { /* ignore */ }
 }
+=======
+>>>>>>> Stashed changes

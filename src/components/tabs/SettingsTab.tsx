@@ -36,9 +36,13 @@ export function SettingsTab({ theme, onThemeChange }: Props) {
 
   // Import/export
   const fileInputRef = useRef<HTMLInputElement>(null);
+<<<<<<< Updated upstream
 
   // MCP connection info
   const [mcpInfo, setMcpInfo] = useState<{ url: string; clientId: string; clientSecret: string } | null>(null);
+=======
+  const [mcpInfo, setMcpInfo] = useState<{ url: string; clientId: string; clientSecret: string; accountManagerUrl: string } | null>(null);
+>>>>>>> Stashed changes
 
   useEffect(() => {
     loadRecoveryCount();
@@ -126,6 +130,10 @@ export function SettingsTab({ theme, onThemeChange }: Props) {
   }
 
   const total = Object.values(state.games).reduce((a, c) => a + (c ? c.length : 0), 0);
+<<<<<<< Updated upstream
+=======
+  const accountManagerUrl = mcpInfo?.accountManagerUrl ?? null;
+>>>>>>> Stashed changes
 
   return (
     <div data-testid="tab-settings">
@@ -156,6 +164,7 @@ export function SettingsTab({ theme, onThemeChange }: Props) {
           <input id="s-confirm-pw" type="password" placeholder="Confirm new password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} />
           <button className="btn btn-ghost" onClick={changePassword}>Change Password</button>
         </div>
+<<<<<<< Updated upstream
       </div>
 
       {/* Recovery codes */}
@@ -168,6 +177,15 @@ export function SettingsTab({ theme, onThemeChange }: Props) {
           }
         </div>
         <button className="btn btn-ghost" onClick={regenRecoveryCodes}>Regenerate Recovery Codes</button>
+=======
+        {accountManagerUrl ? (
+          <a href={accountManagerUrl} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ display: "inline-block", textDecoration: "none" }}>
+            Open Account Manager
+          </a>
+        ) : (
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>Set ACCOUNT_MANAGER_URL to link to account manager.</div>
+        )}
+>>>>>>> Stashed changes
       </div>
 
       {/* Session */}

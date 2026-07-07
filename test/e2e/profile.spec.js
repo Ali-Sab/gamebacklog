@@ -4,7 +4,7 @@ const { test, expect } = require("@playwright/test");
 
 test.beforeEach(async ({ page }) => {
   // Seed a known profile so tests are independent of prior test state
-  const refreshRes = await page.request.post("/api/auth/refresh");
+  const refreshRes = await page.request.get("/api/auth/session");
   const { accessToken } = await refreshRes.json();
   await page.request.post("/api/data", {
     headers: { Authorization: `Bearer ${accessToken}` },
