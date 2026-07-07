@@ -35,10 +35,17 @@ export function AuthProvider({ children, onMain }: { children: ReactNode; onMain
 
   function logout() {
     setAccessToken(null);
-    // Clear the cookie server-side then redirect to account-manager
     const base = import.meta.env.BASE_URL.replace(/\/$/, "");
     fetch(`${base}/api/auth/logout`, { method: "POST", credentials: "include" })
-      .finally(() => { redirectToLogin(); });
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { endSessionUrl?: string } | null) => {
+        if (data?.endSessionUrl) {
+          window.location.href = data.endSessionUrl;
+        } else {
+          redirectToLogin();
+        }
+      })
+      .catch(() => { redirectToLogin(); });
   }
 
   return (

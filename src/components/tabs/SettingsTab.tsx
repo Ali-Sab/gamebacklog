@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { api, getAccountManagerUrl } from "../../api";
+import { api } from "../../api";
 import { useAuth } from "../../context/AuthContext";
 import { useApp } from "../../context/AppContext";
 import { useToast } from "../shared/Toast";
@@ -14,7 +14,7 @@ export function SettingsTab({ theme, onThemeChange }: Props) {
   const { showToast } = useToast();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [mcpInfo, setMcpInfo] = useState<{ url: string; clientId: string; clientSecret: string } | null>(null);
+  const [mcpInfo, setMcpInfo] = useState<{ url: string; clientId: string; clientSecret: string; accountManagerUrl: string } | null>(null);
 
   useEffect(() => {
     api("GET", "/api/mcp-url").then((data) => { if (data.url) setMcpInfo(data); });
@@ -36,7 +36,7 @@ export function SettingsTab({ theme, onThemeChange }: Props) {
   }
 
   const total = Object.values(state.games).reduce((a, c) => a + (c ? c.length : 0), 0);
-  const accountManagerUrl = getAccountManagerUrl();
+  const accountManagerUrl = mcpInfo?.accountManagerUrl ?? null;
 
   return (
     <div data-testid="tab-settings">
@@ -63,7 +63,7 @@ export function SettingsTab({ theme, onThemeChange }: Props) {
             Open Account Manager
           </a>
         ) : (
-          <div style={{ fontSize: 12, color: "var(--muted)" }}>Set VITE_ACCOUNT_MANAGER_URL to link to account manager.</div>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>Set ACCOUNT_MANAGER_URL to link to account manager.</div>
         )}
       </div>
 

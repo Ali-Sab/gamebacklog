@@ -5,11 +5,17 @@ const path = require("path");
 
 module.exports = {
   PORT:            4321,
-  JWT_SECRET:      "e2e-test-jwt-secret-do-not-use-in-production",
   DATA_DIR:        path.join(os.tmpdir(), "gamebacklog-e2e"),
   AUTH_STATE_FILE: path.join(__dirname, ".auth-state.json"),
-  USERNAME:        "e2etester",
-  PASSWORD:        "e2epassword123",
-  // Fixed 32-char base32 TOTP secret (20 bytes) — used for deterministic test codes
-  TOTP_SECRET:     "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+
+  // Account Manager test service — set via E2E_* env vars (populated by homelab-infra's
+  // make test-e2e-gamebacklog, which sources env/test-credentials.env before running).
+  ACCOUNT_MANAGER_URL:    process.env.E2E_ACCOUNT_MANAGER_URL    || "http://localhost:3099",
+  USERNAME:               process.env.E2E_ADMIN_USERNAME         || "alice",
+  PASSWORD:               process.env.E2E_ADMIN_PASSWORD         || "password1234",
+  TOTP_SECRET:            process.env.E2E_TOTP_SECRET            || "",
+
+  OAUTH_CLIENT_ID:        "gamebacklog-web",
+  OAUTH_CLIENT_SECRET:    process.env.E2E_GAMEBACKLOG_CLIENT_SECRET || "test-gamebacklog-secret",
+  OAUTH_REDIRECT_URI:     "http://localhost:4321/auth/callback",
 };

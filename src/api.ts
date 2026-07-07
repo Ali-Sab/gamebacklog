@@ -4,8 +4,6 @@ let _fetching = false;
 export function setAccessToken(t: string | null) { _accessToken = t; }
 export function getAccessToken() { return _accessToken; }
 
-const ACCOUNT_MANAGER_URL = import.meta.env.VITE_ACCOUNT_MANAGER_URL || "";
-
 export function redirectToLogin() {
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   window.location.href = `${base}/auth/login`;
@@ -55,6 +53,3 @@ export async function api(
   return res.json() as Promise<Record<string, unknown>>;
 }
 
-export function getAccountManagerUrl() {
-  return ACCOUNT_MANAGER_URL;
-}
