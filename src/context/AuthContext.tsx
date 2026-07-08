@@ -5,6 +5,7 @@ type Screen = "loading" | "main";
 
 interface AuthContextValue {
   currentScreen: Screen;
+  username: string | null;
   logout: () => void;
 }
 
@@ -12,6 +13,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children, onMain }: { children: ReactNode; onMain: () => void }) {
   const [currentScreen, setCurrentScreen] = useState<Screen>("loading");
+  const [username, setUsername] = useState<string | null>(null);
 
   useEffect(() => { boot(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -24,6 +26,10 @@ export function AuthProvider({ children, onMain }: { children: ReactNode; onMain
         const data = await res.json() as { accessToken?: string };
         if (data.accessToken) {
           setAccessToken(data.accessToken);
+          try {
+            const me = await api("GET", "/api/me") as { username?: string };
+            setUsername(me.username ?? null);
+          } catch { /* non-fatal — cosmetic only */ }
           setCurrentScreen("main");
           onMain();
           return;
@@ -49,7 +55,7 @@ export function AuthProvider({ children, onMain }: { children: ReactNode; onMain
   }
 
   return (
-    <AuthContext.Provider value={{ currentScreen, logout }}>
+    <AuthContext.Provider value={{ currentScreen, username, logout }}>
       {children}
     </AuthContext.Provider>
   );

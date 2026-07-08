@@ -32,7 +32,7 @@ const PROFILE = [{ name: "CORE IDENTITY", text: "I love atmospheric games above 
 describe("get_game_library", () => {
   test("returns all categories", async () => {
     const { readJSON, writeJSON } = makeStore({ "games.json": GAMES });
-    const result = await execTool("get_game_library", {}, readJSON, writeJSON);
+    const result = await execTool("get_game_library", {}, "testuser", readJSON, writeJSON);
     const data = json(result);
     expect(data).toHaveProperty("queue");
     expect(data).toHaveProperty("caveats");
@@ -41,20 +41,20 @@ describe("get_game_library", () => {
 
   test("queue items have 1-based rank", async () => {
     const { readJSON, writeJSON } = makeStore({ "games.json": GAMES });
-    const data = json(await execTool("get_game_library", {}, readJSON, writeJSON));
+    const data = json(await execTool("get_game_library", {}, "testuser", readJSON, writeJSON));
     expect(data.queue[0].rank).toBe(1);
     expect(data.queue[1].rank).toBe(2);
   });
 
   test("all items have a 1-based rank", async () => {
     const { readJSON, writeJSON } = makeStore({ "games.json": GAMES });
-    const data = json(await execTool("get_game_library", {}, readJSON, writeJSON));
+    const data = json(await execTool("get_game_library", {}, "testuser", readJSON, writeJSON));
     expect(data.caveats[0].rank).toBe(1);
   });
 
   test("includes notes for each game", async () => {
     const { readJSON, writeJSON } = makeStore({ "games.json": GAMES });
-    const data = json(await execTool("get_game_library", {}, readJSON, writeJSON));
+    const data = json(await execTool("get_game_library", {}, "testuser", readJSON, writeJSON));
     expect(data.queue[0].note).toBe("Essential metroidvania");
     expect(data.queue[1].note).toBe("Existential horror");
     expect(data.caveats[0].note).toBe("Roguelike with story");
@@ -62,7 +62,7 @@ describe("get_game_library", () => {
 
   test("includes title, mode, risk, hours, category on each game", async () => {
     const { readJSON, writeJSON } = makeStore({ "games.json": GAMES });
-    const data = json(await execTool("get_game_library", {}, readJSON, writeJSON));
+    const data = json(await execTool("get_game_library", {}, "testuser", readJSON, writeJSON));
     const game = data.queue[0];
     expect(game.title).toBe("Hollow Knight");
     expect(game.genre).toBe("atmospheric");
@@ -72,7 +72,7 @@ describe("get_game_library", () => {
 
   test("returns empty categories for fresh library", async () => {
     const { readJSON, writeJSON } = makeStore({ "games.json": {} });
-    const data = json(await execTool("get_game_library", {}, readJSON, writeJSON));
+    const data = json(await execTool("get_game_library", {}, "testuser", readJSON, writeJSON));
     expect(data).toEqual({});
   });
 });
@@ -81,13 +81,13 @@ describe("get_game_library", () => {
 describe("get_taste_profile", () => {
   test("returns the full profile text", async () => {
     const { readJSON, writeJSON } = makeStore({ "profile.json": PROFILE });
-    const result = await execTool("get_taste_profile", {}, readJSON, writeJSON);
+    const result = await execTool("get_taste_profile", {}, "testuser", readJSON, writeJSON);
     expect(text(result)).toBe("CORE IDENTITY\nI love atmospheric games above all else.");
   });
 
   test("returns placeholder when no profile is set", async () => {
     const { readJSON, writeJSON } = makeStore({});
-    const result = await execTool("get_taste_profile", {}, readJSON, writeJSON);
+    const result = await execTool("get_taste_profile", {}, "testuser", readJSON, writeJSON);
     expect(text(result)).toBe("(no profile set)");
   });
 });
@@ -99,7 +99,7 @@ describe("suggest_game_move", () => {
     const { readJSON, writeJSON, store } = makeStore({ "pending.json": [] });
     await execTool("suggest_game_move", {
       title: "SOMA", fromCategory: "queue", toCategory: "played", reason: "Beat it"
-    }, readJSON, writeJSON);
+    }, "testuser", readJSON, writeJSON);
 
     expect(store["pending.json"]).toHaveLength(1);
     const item = store["pending.json"][0];
@@ -118,7 +118,7 @@ describe("suggest_game_move", () => {
     const { readJSON, writeJSON, store } = makeStore({ "pending.json": existing });
     await execTool("suggest_game_move", {
       title: "Hades", fromCategory: "caveats", toCategory: "queue", reason: "Good fit"
-    }, readJSON, writeJSON);
+    }, "testuser", readJSON, writeJSON);
     expect(store["pending.json"]).toHaveLength(2);
   });
 
@@ -127,7 +127,7 @@ describe("suggest_game_move", () => {
     const { readJSON, writeJSON, store } = makeStore({ "pending.json": existing });
     await execTool("suggest_game_move", {
       title: "Hades", fromCategory: "caveats", toCategory: "played", reason: "New reason"
-    }, readJSON, writeJSON);
+    }, "testuser", readJSON, writeJSON);
     expect(store["pending.json"]).toHaveLength(1);
     expect(store["pending.json"][0].id).toBe("aaa");
     expect(store["pending.json"][0].data.toCategory).toBe("played");
@@ -139,7 +139,7 @@ describe("suggest_game_move", () => {
     const { readJSON, writeJSON, store } = makeStore({ "pending.json": existing });
     await execTool("suggest_game_move", {
       title: "Disco Elysium", fromCategory: "queue", toCategory: "played", reason: "Already finished"
-    }, readJSON, writeJSON);
+    }, "testuser", readJSON, writeJSON);
     // Should still be one item — the new_game, not a separate game_move
     expect(store["pending.json"]).toHaveLength(1);
     expect(store["pending.json"][0].type).toBe("new_game");
@@ -151,7 +151,7 @@ describe("suggest_game_move", () => {
     const { readJSON, writeJSON } = makeStore({ "pending.json": [] });
     const result = await execTool("suggest_game_move", {
       title: "SOMA", fromCategory: "queue", toCategory: "played", reason: "Done"
-    }, readJSON, writeJSON);
+    }, "testuser", readJSON, writeJSON);
     expect(text(result)).toContain("SOMA");
     expect(text(result)).toContain("Awaiting user approval");
   });
@@ -165,7 +165,7 @@ describe("suggest_profile_update", () => {
       section: "SESSION LENGTH",
       change: "Prefers under 2 hours per session.",
       reason: "Observed from conversation"
-    }, readJSON, writeJSON);
+    }, "testuser", readJSON, writeJSON);
 
     const item = store["pending.json"][0];
     expect(item.type).toBe("profile_update");
@@ -179,7 +179,7 @@ describe("suggest_profile_update", () => {
     const { readJSON, writeJSON, store } = makeStore({ "pending.json": existing });
     await execTool("suggest_profile_update", {
       section: "DIFFICULTY", change: "New change", reason: "Updated"
-    }, readJSON, writeJSON);
+    }, "testuser", readJSON, writeJSON);
     expect(store["pending.json"]).toHaveLength(1);
     expect(store["pending.json"][0].id).toBe("bbb");
     expect(store["pending.json"][0].data.change).toBe("New change");
@@ -189,7 +189,7 @@ describe("suggest_profile_update", () => {
     const { readJSON, writeJSON } = makeStore({ "pending.json": [] });
     const result = await execTool("suggest_profile_update", {
       section: "DIFFICULTY", change: "Handles hard games fine.", reason: "Evidence"
-    }, readJSON, writeJSON);
+    }, "testuser", readJSON, writeJSON);
     expect(text(result)).toContain("DIFFICULTY");
     expect(text(result)).toContain("Awaiting user approval");
   });
@@ -207,7 +207,7 @@ describe("suggest_new_game", () => {
       hours: "30",
       note: "Extraordinary writing",
       reason: "Perfect fit"
-    }, readJSON, writeJSON);
+    }, "testuser", readJSON, writeJSON);
 
     const item = store["pending.json"][0];
     expect(item.type).toBe("new_game");
@@ -224,7 +224,7 @@ describe("suggest_new_game", () => {
     const { readJSON, writeJSON, store } = makeStore({ "pending.json": [] });
     await execTool("suggest_new_game", {
       title: "Minimal Game", category: "yourCall", reason: "Worth a look"
-    }, readJSON, writeJSON);
+    }, "testuser", readJSON, writeJSON);
 
     const item = store["pending.json"][0];
     expect(item.data.genre).toBe("");
@@ -238,7 +238,7 @@ describe("suggest_new_game", () => {
     const { readJSON, writeJSON, store } = makeStore({ "pending.json": existing });
     await execTool("suggest_new_game", {
       title: "Disco Elysium", category: "queue", reason: "Better fit actually"
-    }, readJSON, writeJSON);
+    }, "testuser", readJSON, writeJSON);
     expect(store["pending.json"]).toHaveLength(1);
     expect(store["pending.json"][0].id).toBe("ccc");
     expect(store["pending.json"][0].data.category).toBe("queue");
@@ -248,7 +248,7 @@ describe("suggest_new_game", () => {
     const { readJSON, writeJSON } = makeStore({ "pending.json": [] });
     const result = await execTool("suggest_new_game", {
       title: "New Game", category: "queue", reason: "Reason"
-    }, readJSON, writeJSON);
+    }, "testuser", readJSON, writeJSON);
     expect(text(result)).toContain("New Game");
     expect(text(result)).toContain("Awaiting user approval");
   });
@@ -259,7 +259,7 @@ describe("unknown tool", () => {
   test("throws McpError for unknown tool name", async () => {
     const { readJSON, writeJSON } = makeStore({});
     await expect(
-      execTool("totally_unknown_tool", {}, readJSON, writeJSON)
+      execTool("totally_unknown_tool", {}, "testuser", readJSON, writeJSON)
     ).rejects.toThrow();
   });
 });

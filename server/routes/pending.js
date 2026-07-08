@@ -6,40 +6,40 @@ const { db, readGames, writeGames, readProfile, writeProfile, readPending, write
 const requireAuth = require("../middleware/requireAuth");
 const { apply: applyPending } = require("../pendingTypes");
 
-function loadCtx() {
+function loadCtx(username) {
   return {
-    games:   readGames()   || {},
-    profile: readProfile() || []
+    games:   readGames(username)   || {},
+    profile: readProfile(username) || []
   };
 }
 
-function persistCtx(ctx) {
-  writeGames(ctx.games);
-  writeProfile(ctx.profile);
+function persistCtx(username, ctx) {
+  writeGames(username, ctx.games);
+  writeProfile(username, ctx.profile);
 }
 
 router.get("/pending/history", requireAuth, (req, res) => {
-  res.json(readPending());
+  res.json(readPending(req.user));
 });
 
 router.get("/pending", requireAuth, (req, res) => {
-  const pending = readPending();
+  const pending = readPending(req.user);
   res.json(pending.filter(p => p.status === "pending"));
 });
 
 router.post("/pending/:id/approve", requireAuth, (req, res) => {
   try {
     const result = db.transaction(() => {
-      const pending = readPending();
+      const pending = readPending(req.user);
       const item = pending.find(p => p.id === req.params.id);
       if (!item) return { status: 404, error: "Not found" };
       if (item.status !== "pending") return { status: 400, error: "Not pending" };
-      const ctx = loadCtx();
+      const ctx = loadCtx(req.user);
       applyPending(item, ctx);
-      persistCtx(ctx);
+      persistCtx(req.user, ctx);
       item.status = "approved";
       item.approvedAt = new Date().toISOString();
-      writePending(pending);
+      writePending(req.user, pending);
       return { status: 200, pending };
     })();
     if (result.status !== 200) return res.status(result.status).json({ error: result.error });
@@ -53,9 +53,9 @@ router.post("/pending/:id/approve", requireAuth, (req, res) => {
 router.post("/pending/approve-all", requireAuth, (req, res) => {
   try {
     const { approved, errors } = db.transaction(() => {
-      const pending = readPending();
+      const pending = readPending(req.user);
       const toApprove = pending.filter(p => p.status === "pending");
-      const ctx = loadCtx();
+      const ctx = loadCtx(req.user);
       const errs = [];
       let ok = 0;
       for (const item of toApprove) {
@@ -69,8 +69,8 @@ router.post("/pending/approve-all", requireAuth, (req, res) => {
           errs.push(item.id);
         }
       }
-      persistCtx(ctx);
-      writePending(pending);
+      persistCtx(req.user, ctx);
+      writePending(req.user, pending);
       return { approved: ok, errors: errs };
     })();
     res.json({ approved, errors });
@@ -81,12 +81,12 @@ router.post("/pending/approve-all", requireAuth, (req, res) => {
 });
 
 router.post("/pending/:id/reject", requireAuth, (req, res) => {
-  const pending = readPending();
+  const pending = readPending(req.user);
   const item = pending.find(p => p.id === req.params.id);
   if (!item) return res.status(404).json({ error: "Not found" });
   item.status = "rejected";
   item.rejectedAt = new Date().toISOString();
-  writePending(pending);
+  writePending(req.user, pending);
   res.json(pending.filter(p => p.status === "pending"));
 });
 

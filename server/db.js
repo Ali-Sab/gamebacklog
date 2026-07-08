@@ -23,6 +23,24 @@ try { db.exec("ALTER TABLE games RENAME COLUMN mode TO genre"); } catch (e) {
   if (!e.message?.includes("no such column") && !e.message?.includes("no such table"))
     console.warn("[db] genre migration:", e.message);
 }
+try { db.exec("ALTER TABLE games ADD COLUMN username TEXT"); } catch {}
+try { db.exec("ALTER TABLE pending ADD COLUMN username TEXT"); } catch {}
+
+// Reshape `profile` from a singleton row to one row per user. Only reshapes —
+// never guesses ownership of the pre-existing row; that's done by hand via
+// scripts/backfill-username.js, which reads it out of profile_old.
+try {
+  const cols = db.prepare("PRAGMA table_info(profile)").all().map(c => c.name);
+  if (cols.includes("id") && !cols.includes("username")) {
+    db.exec(`
+      ALTER TABLE profile RENAME TO profile_old;
+      CREATE TABLE profile (
+        username TEXT PRIMARY KEY,
+        content  TEXT NOT NULL DEFAULT ''
+      );
+    `);
+  }
+} catch (e) { console.warn("[db] profile migration:", e.message); }
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS games (
@@ -38,12 +56,13 @@ db.exec(`
     url         TEXT,
     platform    TEXT,
     input       TEXT,
-    image_url   TEXT
+    image_url   TEXT,
+    username    TEXT
   );
 
   CREATE TABLE IF NOT EXISTS profile (
-    id      INTEGER PRIMARY KEY CHECK (id = 1),
-    content TEXT NOT NULL DEFAULT ''
+    username TEXT PRIMARY KEY,
+    content  TEXT NOT NULL DEFAULT ''
   );
 
   CREATE TABLE IF NOT EXISTS pending (
@@ -55,12 +74,16 @@ db.exec(`
     created_at  TEXT NOT NULL,
     updated_at  TEXT,
     approved_at TEXT,
-    rejected_at TEXT
+    rejected_at TEXT,
+    username    TEXT
   );
 `);
 
+try { db.exec("DROP INDEX IF EXISTS idx_games_category"); } catch {}
 db.exec(`
-  CREATE INDEX IF NOT EXISTS idx_games_category ON games(category);
+  CREATE INDEX IF NOT EXISTS idx_games_username_category ON games(username, category);
+  CREATE INDEX IF NOT EXISTS idx_games_username ON games(username);
+  CREATE INDEX IF NOT EXISTS idx_pending_username ON pending(username);
   CREATE INDEX IF NOT EXISTS idx_pending_status ON pending(status);
   CREATE INDEX IF NOT EXISTS idx_pending_type ON pending(type);
 `);
@@ -84,9 +107,9 @@ function rowToGame(row) {
   return g;
 }
 
-function gameToRow(g, category) {
+function gameToRow(g, category, username) {
   return {
-    id: g.id, title: g.title, category,
+    id: g.id, title: g.title, category, username,
     rank: g.rank ?? null, genre: g.genre ?? g.mode ?? null,
     risk: g.risk ?? null, hours: g.hours ?? null, note: g.note ?? null,
     played_date: g.playedDate ?? null,
@@ -97,8 +120,8 @@ function gameToRow(g, category) {
   };
 }
 
-function readGames() {
-  const rows = db.prepare("SELECT * FROM games").all();
+function readGames(username) {
+  const rows = db.prepare("SELECT * FROM games WHERE username = ?").all(username);
   if (rows.length === 0) return null;
   const result = Object.fromEntries(ALL_CATS.map(c => [c, []]));
   for (const row of rows) {
@@ -109,23 +132,24 @@ function readGames() {
 }
 
 const upsertGame = db.prepare(`
-  INSERT INTO games (id, title, category, rank, genre, risk, hours, note, played_date, url, platform, input, image_url)
-  VALUES (@id, @title, @category, @rank, @genre, @risk, @hours, @note, @played_date, @url, @platform, @input, @image_url)
+  INSERT INTO games (id, title, category, rank, genre, risk, hours, note, played_date, url, platform, input, image_url, username)
+  VALUES (@id, @title, @category, @rank, @genre, @risk, @hours, @note, @played_date, @url, @platform, @input, @image_url, @username)
   ON CONFLICT(id) DO UPDATE SET
     title=excluded.title, category=excluded.category, rank=excluded.rank,
     genre=excluded.genre, risk=excluded.risk, hours=excluded.hours, note=excluded.note,
     played_date=excluded.played_date, url=excluded.url,
-    platform=excluded.platform, input=excluded.input, image_url=excluded.image_url
+    platform=excluded.platform, input=excluded.input, image_url=excluded.image_url,
+    username=excluded.username
 `);
 
-const deleteGame = db.prepare("DELETE FROM games WHERE id = ?");
-const deleteAllGames = db.prepare("DELETE FROM games");
+const deleteGame = db.prepare("DELETE FROM games WHERE id = ? AND username = ?");
+const deleteAllGamesForUser = db.prepare("DELETE FROM games WHERE username = ?");
 
-function writeGames(gamesObj) {
+function writeGames(username, gamesObj) {
   const replaceAll = db.transaction((obj) => {
-    deleteAllGames.run();
+    deleteAllGamesForUser.run(username);
     for (const [category, list] of Object.entries(obj)) {
-      for (const g of (list || [])) upsertGame.run(gameToRow(g, category));
+      for (const g of (list || [])) upsertGame.run(gameToRow(g, category, username));
     }
   });
   replaceAll(gamesObj);
@@ -134,26 +158,26 @@ function writeGames(gamesObj) {
 // ── Typed per-row API for games — preferred over the readJSON/writeJSON shim
 // for endpoints that mutate a single game. Avoids full table rewrites.
 
-function findGameById(id) {
-  const row = db.prepare("SELECT * FROM games WHERE id = ?").get(id);
+function findGameById(username, id) {
+  const row = db.prepare("SELECT * FROM games WHERE id = ? AND username = ?").get(id, username);
   return row ? { ...rowToGame(row), category: row.category } : null;
 }
 
-function insertGame(game, category) {
-  upsertGame.run(gameToRow(game, category));
+function insertGame(username, game, category) {
+  upsertGame.run(gameToRow(game, category, username));
 }
 
-function updateGame(id, patch) {
-  const row = db.prepare("SELECT * FROM games WHERE id = ?").get(id);
+function updateGame(username, id, patch) {
+  const row = db.prepare("SELECT * FROM games WHERE id = ? AND username = ?").get(id, username);
   if (!row) return false;
   // Patch keys are camelCase (mirroring the API). Map back to columns.
   const next = { ...rowToGame(row), category: row.category, ...patch };
-  upsertGame.run(gameToRow(next, patch.category ?? row.category));
+  upsertGame.run(gameToRow(next, patch.category ?? row.category, username));
   return true;
 }
 
-function deleteGameById(id) {
-  return deleteGame.run(id).changes > 0;
+function deleteGameById(username, id) {
+  return deleteGame.run(id, username).changes > 0;
 }
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
@@ -175,8 +199,8 @@ function migrateLegacyProfile(text) {
   return sections.filter(s => s.name);
 }
 
-function readProfile() {
-  const row = db.prepare("SELECT content FROM profile WHERE id = 1").get();
+function readProfile(username) {
+  const row = db.prepare("SELECT content FROM profile WHERE username = ?").get(username);
   if (!row) return null;
   try {
     const parsed = JSON.parse(row.content);
@@ -190,12 +214,12 @@ function readProfile() {
   return null;
 }
 
-function writeProfile(content) {
+function writeProfile(username, content) {
   const value = Array.isArray(content) ? JSON.stringify(content) : JSON.stringify(content ?? []);
   db.prepare(`
-    INSERT INTO profile (id, content) VALUES (1, ?)
-    ON CONFLICT(id) DO UPDATE SET content=excluded.content
-  `).run(value);
+    INSERT INTO profile (username, content) VALUES (?, ?)
+    ON CONFLICT(username) DO UPDATE SET content=excluded.content
+  `).run(username, value);
 }
 
 // ─── Pending ──────────────────────────────────────────────────────────────────
@@ -214,16 +238,16 @@ function rowToPending(row) {
   };
 }
 
-function readPending() {
-  return db.prepare("SELECT * FROM pending ORDER BY created_at ASC").all().map(rowToPending);
+function readPending(username) {
+  return db.prepare("SELECT * FROM pending WHERE username = ? ORDER BY created_at ASC").all(username).map(rowToPending);
 }
 
-function writePending(items) {
+function writePending(username, items) {
   const replace = db.transaction((arr) => {
-    db.prepare("DELETE FROM pending").run();
+    db.prepare("DELETE FROM pending WHERE username = ?").run(username);
     const ins = db.prepare(`
-      INSERT INTO pending (id, type, status, reason, data, created_at, updated_at, approved_at, rejected_at)
-      VALUES (@id, @type, @status, @reason, @data, @created_at, @updated_at, @approved_at, @rejected_at)
+      INSERT INTO pending (id, type, status, reason, data, created_at, updated_at, approved_at, rejected_at, username)
+      VALUES (@id, @type, @status, @reason, @data, @created_at, @updated_at, @approved_at, @rejected_at, @username)
     `);
     for (const p of arr) {
       ins.run({
@@ -236,6 +260,7 @@ function writePending(items) {
         updated_at:  p.updatedAt  ?? null,
         approved_at: p.approvedAt ?? null,
         rejected_at: p.rejectedAt ?? null,
+        username:    username,
       });
     }
   });

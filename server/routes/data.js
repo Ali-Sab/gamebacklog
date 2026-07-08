@@ -44,17 +44,22 @@ router.get("/mcp-url", requireAuth, async (req, res) => {
   });
 });
 
+// Current authenticated user's identity
+router.get("/me", requireAuth, (req, res) => {
+  res.json({ username: req.user });
+});
+
 // Get all app data (games + profile)
 router.get("/data", requireAuth, (req, res) => {
-  const games   = readGames();
-  const profile = readProfile();
+  const games   = readGames(req.user);
+  const profile = readProfile(req.user);
   res.json({ games, profile });
 });
 
 // Export — downloads a JSON snapshot of games + profile
 router.get("/export", requireAuth, (req, res) => {
-  const games   = readGames();
-  const profile = readProfile();
+  const games   = readGames(req.user);
+  const profile = readProfile(req.user);
   const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="gamebacklog-${ts}.json"`);
@@ -76,8 +81,8 @@ router.post("/import", requireAuth, (req, res) => {
     return res.status(400).json({ error: "profile must be an array or null" });
   }
   db.transaction(() => {
-    writeGames(games);
-    writeProfile(profile ?? []);
+    writeGames(req.user, games);
+    writeProfile(req.user, profile ?? []);
   })();
   res.json({ ok: true });
 });
@@ -99,8 +104,8 @@ router.post("/data", requireAuth, (req, res) => {
     return res.status(400).json({ error: "profile must be an array" });
   }
   db.transaction(() => {
-    if (games   !== undefined) writeGames(games);
-    if (profile !== undefined) writeProfile(profile);
+    if (games   !== undefined) writeGames(req.user, games);
+    if (profile !== undefined) writeProfile(req.user, profile);
   })();
   res.json({ ok: true });
 });

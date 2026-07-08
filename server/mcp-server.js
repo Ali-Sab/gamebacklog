@@ -22,10 +22,12 @@ function requireMcpToken(req, res, next) {
     res.setHeader("WWW-Authenticate", `Bearer resource_metadata_url="${issuer}/.well-known/oauth-protected-resource${mcpPath}"`);
     return res.status(401).json({ error: "unauthorized" });
   }
-  if (!verifyMcpToken(token)) {
+  const payload = verifyMcpToken(token);
+  if (!payload) {
     res.setHeader("WWW-Authenticate", `Bearer error="invalid_token"`);
     return res.status(401).json({ error: "invalid_token" });
   }
+  req.mcpUser = payload.sub;
   next();
 }
 
@@ -33,17 +35,17 @@ function requireMcpToken(req, res, next) {
 
 // readJSON/writeJSON are optional overrides — used by tests for mock injection.
 // When absent, the real db functions are used.
-function queue(type, args, reason, readJSON, writeJSON) {
-  const pending = readJSON ? readJSON("pending.json", []) : readPending();
+function queue(type, args, reason, username, readJSON, writeJSON) {
+  const pending = readJSON ? readJSON("pending.json", []) : readPending(username);
   const result = createOrUpdate(type, args, reason, pending);
-  if (writeJSON) writeJSON("pending.json", pending); else writePending(pending);
+  if (writeJSON) writeJSON("pending.json", pending); else writePending(username, pending);
   return result;
 }
 
-async function execTool(name, args = {}, readJSON, writeJSON) {
+async function execTool(name, args = {}, username, readJSON, writeJSON) {
   switch (name) {
     case "get_game_library": {
-      const games = (readJSON ? readJSON("games.json", {}) : readGames()) || {};
+      const games = (readJSON ? readJSON("games.json", {}) : readGames(username)) || {};
       const result = {};
       for (const [cat, list] of Object.entries(games)) {
         const sorted = [...(list || [])].sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
@@ -57,7 +59,7 @@ async function execTool(name, args = {}, readJSON, writeJSON) {
     }
 
     case "get_taste_profile": {
-      const profile = readJSON ? readJSON("profile.json", []) : readProfile();
+      const profile = readJSON ? readJSON("profile.json", []) : readProfile(username);
       if (!Array.isArray(profile) || profile.length === 0) {
         return { content: [{ type: "text", text: "(no profile set)" }] };
       }
@@ -67,13 +69,13 @@ async function execTool(name, args = {}, readJSON, writeJSON) {
 
     case "suggest_reorder": {
       const { category, rankedTitles, reason } = args;
-      queue("reorder", { category, rankedTitles }, reason, readJSON, writeJSON);
+      queue("reorder", { category, rankedTitles }, reason, username, readJSON, writeJSON);
       return { content: [{ type: "text", text: `Reorder suggestion queued for ${category} (${rankedTitles.length} games). Awaiting user approval.` }] };
     }
 
     case "suggest_game_move": {
       const { title, fromCategory, toCategory, rank, reason } = args;
-      const result = queue("game_move", { title, fromCategory, toCategory, rank }, reason, readJSON, writeJSON);
+      const result = queue("game_move", { title, fromCategory, toCategory, rank }, reason, username, readJSON, writeJSON);
       const text = result.collapsed
         ? `Suggestion updated: "${title}" will be added directly to ${toCategory}. Awaiting user approval.`
         : `Suggestion queued: move "${title}" from ${fromCategory} to ${toCategory}. Awaiting user approval.`;
@@ -82,7 +84,7 @@ async function execTool(name, args = {}, readJSON, writeJSON) {
 
     case "suggest_profile_update": {
       const { section, change, reason } = args;
-      queue("profile_update", { section, change }, reason, readJSON, writeJSON);
+      queue("profile_update", { section, change }, reason, username, readJSON, writeJSON);
       return { content: [{ type: "text", text: `Profile update suggestion queued for section "${section}". Awaiting user approval.` }] };
     }
 
@@ -92,13 +94,13 @@ async function execTool(name, args = {}, readJSON, writeJSON) {
       if (Object.values(editable).every(v => v === undefined)) {
         return { content: [{ type: "text", text: "No changes specified." }] };
       }
-      const result = queue("game_edit", { title, ...editable }, reason, readJSON, writeJSON);
+      const result = queue("game_edit", { title, ...editable }, reason, username, readJSON, writeJSON);
       return { content: [{ type: "text", text: `Edit suggestion queued for "${title}" (${Object.keys(result.item.data.changes).join(", ")}). Awaiting user approval.` }] };
     }
 
     case "suggest_new_game": {
       const { title, category, reason } = args;
-      queue("new_game", args, reason, readJSON, writeJSON);
+      queue("new_game", args, reason, username, readJSON, writeJSON);
       return { content: [{ type: "text", text: `New game suggestion queued: "${title}" → ${category}. Awaiting user approval.` }] };
     }
 
@@ -109,11 +111,11 @@ async function execTool(name, args = {}, readJSON, writeJSON) {
 
 function createMcpRouter() {
   const router = express.Router();
-  const sessions = new Map(); // sessionId -> transport
+  const sessions = new Map(); // sessionId -> { transport, username }
 
   router.use(requireMcpToken);
 
-  function buildServer() {
+  function buildServer(username) {
     const server = new Server(
       { name: "gamebacklog", version: "1.0.0" },
       {
@@ -227,7 +229,7 @@ function createMcpRouter() {
 
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args = {} } = request.params;
-      return execTool(name, args);
+      return execTool(name, args, username);
     });
 
     return server;
@@ -245,16 +247,28 @@ function createMcpRouter() {
     next();
   });
 
+  // A session must only ever be driven by the bearer token that created it —
+  // session IDs are unguessable (16 random bytes) but this closes the gap
+  // outright rather than relying on that alone.
+  function ownsSession(req, sessionId) {
+    const entry = sessions.get(sessionId);
+    return !!entry && entry.username === req.mcpUser;
+  }
+
   // POST — initialize a new session or handle an existing one
   router.post("/", async (req, res) => {
     const sessionId = req.headers["mcp-session-id"];
     try {
       if (sessionId && sessions.has(sessionId)) {
+        if (!ownsSession(req, sessionId)) {
+          return res.status(403).json({ error: "forbidden" });
+        }
         // Reuse existing session transport
-        await sessions.get(sessionId).handleRequest(req, res, req.body);
+        await sessions.get(sessionId).transport.handleRequest(req, res, req.body);
       } else if (!sessionId) {
         // New session — session ID is assigned during handleRequest
-        const server = buildServer();
+        const username = req.mcpUser;
+        const server = buildServer(username);
         const transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => crypto.randomBytes(16).toString("hex"),
         });
@@ -262,7 +276,7 @@ function createMcpRouter() {
         await transport.handleRequest(req, res, req.body);
         // After handleRequest the session ID is available
         if (transport.sessionId) {
-          sessions.set(transport.sessionId, transport);
+          sessions.set(transport.sessionId, { transport, username });
           transport.onclose = () => sessions.delete(transport.sessionId);
         }
       } else {
@@ -280,8 +294,11 @@ function createMcpRouter() {
     if (!sessionId || !sessions.has(sessionId)) {
       return res.status(404).json({ error: "Session not found" });
     }
+    if (!ownsSession(req, sessionId)) {
+      return res.status(403).json({ error: "forbidden" });
+    }
     try {
-      await sessions.get(sessionId).handleRequest(req, res);
+      await sessions.get(sessionId).transport.handleRequest(req, res);
     } catch (e) {
       console.error("MCP SSE error:", e);
       if (!res.headersSent) res.status(500).json({ error: "MCP server error" });
@@ -292,7 +309,10 @@ function createMcpRouter() {
   router.delete("/", async (req, res) => {
     const sessionId = req.headers["mcp-session-id"];
     if (sessionId && sessions.has(sessionId)) {
-      await sessions.get(sessionId).close().catch(() => {});
+      if (!ownsSession(req, sessionId)) {
+        return res.status(403).json({ error: "forbidden" });
+      }
+      await sessions.get(sessionId).transport.close().catch(() => {});
       sessions.delete(sessionId);
     }
     res.status(204).end();
