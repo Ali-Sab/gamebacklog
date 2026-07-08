@@ -111,6 +111,7 @@ router.get("/auth/callback", async (req, res) => {
 
     const data = await tokenRes.json();
     if (!tokenRes.ok || !data.access_token) {
+      console.error("[auth/callback] token exchange failed:", tokenRes.status, data);
       return res.redirect("/?auth_error=token_exchange_failed");
     }
 

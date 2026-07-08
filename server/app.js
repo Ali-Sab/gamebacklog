@@ -46,6 +46,21 @@ for (const prefix of ["/api", `${BASE_PATH}/api`]) {
 }
 
 // ─── MCP server ───────────────────────────────────────────────────────────────
+// RFC 9728 protected-resource metadata. MCP clients fetch this (its URL is
+// advertised in the WWW-Authenticate header on a 401 from /mcp, see
+// requireMcpToken in mcp-server.js) to learn which authorization server to
+// use before starting the OAuth flow.
+app.get("/.well-known/oauth-protected-resource/mcp", (req, res) => {
+  const proto = req.headers["x-forwarded-proto"] || req.protocol;
+  const host  = req.headers["x-forwarded-host"]  || req.get("host");
+  const accountManagerUrl = process.env.ACCOUNT_MANAGER_URL || "http://localhost:3001";
+  res.setHeader("Cache-Control", "no-store");
+  res.json({
+    resource: `${proto}://${host}/mcp`,
+    authorization_servers: [accountManagerUrl],
+  });
+});
+
 app.options("/mcp", (req, res) => {
   res.setHeader("Access-Control-Allow-Origin",  req.headers.origin || "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");

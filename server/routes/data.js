@@ -29,8 +29,12 @@ router.get("/mcp-url", requireAuth, async (req, res) => {
       const data = await r.json();
       mcpClientId     = data.client_id     || "";
       mcpClientSecret = data.client_secret || "";
+    } else {
+      console.error("[mcp-url] /api/mcp-client failed:", r.status, await r.text().catch(() => ""));
     }
-  } catch { /* account-manager unreachable — leave blank */ }
+  } catch (e) {
+    console.error("[mcp-url] /api/mcp-client request error:", e);
+  }
 
   res.json({
     url:               `${proto}://${host}/mcp`,
