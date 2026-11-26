@@ -5,7 +5,7 @@ const router  = express.Router();
 const { db, readGames, writeGames, readProfile, writeProfile } = require("../db");
 const requireAuth = require("../middleware/requireAuth");
 
-const ACCOUNT_MANAGER_URL  = process.env.ACCOUNT_MANAGER_URL  || "http://localhost:3001";
+const { PUBLIC, INTERNAL } = require("../lib/accountManager");
 const OAUTH_CLIENT_ID      = process.env.OAUTH_CLIENT_ID      || process.env.GAMEBACKLOG_CLIENT_ID      || "";
 const OAUTH_CLIENT_SECRET  = process.env.OAUTH_CLIENT_SECRET  || process.env.GAMEBACKLOG_CLIENT_SECRET  || "";
 const OAUTH_REDIRECT_URI   = process.env.OAUTH_REDIRECT_URI   || process.env.GAMEBACKLOG_REDIRECT_URI   || "";
@@ -17,7 +17,7 @@ router.get("/mcp-url", requireAuth, async (req, res) => {
 
   let mcpClientId = "", mcpClientSecret = "";
   try {
-    const r = await fetch(`${ACCOUNT_MANAGER_URL}/api/mcp-client`, {
+    const r = await fetch(`${INTERNAL}/api/mcp-client`, {
       method: "POST",
       headers: {
         "Authorization": "Basic " + Buffer.from(`${OAUTH_CLIENT_ID}:${OAUTH_CLIENT_SECRET}`).toString("base64"),
@@ -40,7 +40,7 @@ router.get("/mcp-url", requireAuth, async (req, res) => {
     url:               `${proto}://${host}/mcp`,
     clientId:          mcpClientId,
     clientSecret:      mcpClientSecret,
-    accountManagerUrl: ACCOUNT_MANAGER_URL,
+    accountManagerUrl: PUBLIC,
   });
 });
 

@@ -2,6 +2,7 @@
 
 const fs  = require("fs");
 const jwt = require("jsonwebtoken");
+const { INTERNAL } = require("./accountManager");
 
 let _publicKey = null;
 
@@ -16,8 +17,7 @@ async function preloadPublicKey() {
     return;
   }
 
-  const base = (process.env.ACCOUNT_MANAGER_URL || "http://localhost:3001").replace(/\/$/, "");
-  const res = await fetch(`${base}/.well-known/jwks.json`);
+  const res = await fetch(`${INTERNAL}/.well-known/jwks.json`);
   if (!res.ok) throw new Error(`JWKS fetch failed: ${res.status}`);
   const { keys } = await res.json();
   const jwk = keys?.[0];

@@ -4,8 +4,8 @@ const crypto  = require("crypto");
 const express = require("express");
 const router  = express.Router();
 
-const ACCOUNT_MANAGER_URL   = process.env.ACCOUNT_MANAGER_URL || "http://localhost:3001";
-const ACCOUNT_MANAGER_TOKEN = `${ACCOUNT_MANAGER_URL}/token`;
+const { PUBLIC, INTERNAL } = require("../lib/accountManager");
+const ACCOUNT_MANAGER_TOKEN = `${INTERNAL}/token`;
 // Accept OAUTH_* (infra convention) with GAMEBACKLOG_* as fallback (dev .env legacy)
 const CLIENT_ID     = process.env.OAUTH_CLIENT_ID     || process.env.GAMEBACKLOG_CLIENT_ID     || "";
 const CLIENT_SECRET = process.env.OAUTH_CLIENT_SECRET || process.env.GAMEBACKLOG_CLIENT_SECRET || "";
@@ -20,17 +20,17 @@ try {
 
 // Fetch end_session_endpoint from account-manager's discovery document at startup.
 // Falls back to the conventional path if discovery is unavailable.
-let endSessionEndpoint = `${ACCOUNT_MANAGER_URL}/logout`;
-fetch(`${ACCOUNT_MANAGER_URL}/.well-known/oauth-authorization-server`)
+let endSessionEndpoint = `${PUBLIC}/logout`;
+fetch(`${INTERNAL}/.well-known/oauth-authorization-server`)
   .then(r => r.json())
   .then(data => {
     if (data.end_session_endpoint) {
-      // Rewrite hostname/port to match ACCOUNT_MANAGER_URL so the browser can reach it.
+      // Rewrite hostname/port to match PUBLIC so the browser can reach it.
       // The discovery doc may return a Docker-internal host (e.g. account-manager-test:3001)
       // while the browser needs the host-visible URL (e.g. localhost:3099).
       try {
         const discovered = new URL(data.end_session_endpoint);
-        const amBase     = new URL(ACCOUNT_MANAGER_URL);
+        const amBase     = new URL(PUBLIC);
         discovered.protocol = amBase.protocol;
         discovered.hostname  = amBase.hostname;
         discovered.port      = amBase.port;
@@ -70,7 +70,7 @@ router.get("/auth/login", (req, res) => {
     state,
   });
 
-  res.redirect(`${ACCOUNT_MANAGER_URL}/authorize?${params}`);
+  res.redirect(`${PUBLIC}/authorize?${params}`);
 });
 
 // ─── /auth/callback — receive code from account-manager, exchange for token ──
