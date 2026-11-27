@@ -8,16 +8,19 @@ const THEMES = ["void", "dusk", "ash", "light"];
 
 interface Props { theme: string; onThemeChange: (t: string) => void; }
 
+interface McpInfo { url: string; clientId: string; clientSecret?: string; secretAdminOnly?: boolean; accountManagerUrl: string; }
+
 export function SettingsTab({ theme, onThemeChange }: Props) {
   const { logout } = useAuth();
   const { state } = useApp();
   const { showToast } = useToast();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [mcpInfo, setMcpInfo] = useState<{ url: string; clientId: string; clientSecret?: string; secretAdminOnly?: boolean; accountManagerUrl: string } | null>(null);
+  const [mcpInfo, setMcpInfo] = useState<McpInfo | null>(null);
 
   useEffect(() => {
-    api("GET", "/api/mcp-url").then((data) => { if (data.url) setMcpInfo(data); });
+    // api() returns untyped JSON; /api/mcp-url sends McpInfo.
+    api("GET", "/api/mcp-url").then((data) => { if (data.url) setMcpInfo(data as unknown as McpInfo); });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleExport() { window.open("/api/export"); }
