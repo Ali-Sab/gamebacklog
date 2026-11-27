@@ -1,8 +1,9 @@
 name: Deploy
 
+# Manual only. The Pi deploys with homelab-infra/deploy.sh, and this workflow's
+# target (a systemd service) is from the old setup. A push must not start it.
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   # Re-run tests so deploy.yml is self-contained and the dependency is explicit.
