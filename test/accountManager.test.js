@@ -396,11 +396,12 @@ describe("GET /api/mcp-url", () => {
   const mcpTable = (base) => ({
     [base + "/api/mcp-client"]: () => jsonResponse({ client_id: "mcp-id", client_secret: "mcp-sec" }),
   });
-  const bearer = () => ({ Authorization: `Bearer ${setupAndLogin().accessToken}` });
+  const bearer = (claims) => ({ Authorization: `Bearer ${setupAndLogin(claims).accessToken}` });
+  const adminBearer = () => bearer({ admin: true });
 
   test("POSTs to INTERNAL /api/mcp-client; response accountManagerUrl is PUBLIC", async () => {
     const { app, f } = loadData({ table: mcpTable(INT) });
-    const res = await request(app).get("/api/mcp-url").set(bearer()).expect(200);
+    const res = await request(app).get("/api/mcp-url").set(adminBearer()).expect(200);
     expect(res.body.accountManagerUrl).toBe(PUB);
     expect(res.body.clientId).toBe("mcp-id");
     expect(res.body.clientSecret).toBe("mcp-sec");
@@ -421,6 +422,39 @@ describe("GET /api/mcp-url", () => {
     expect(f).toHaveBeenCalledWith(PUB + "/api/mcp-client", expect.objectContaining({ method: "POST" }));
     expect(res.body.accountManagerUrl).toBe(PUB);
     expect(res.body.clientId).toBe("mcp-id");
+  });
+
+  test("an admin gets the client secret", async () => {
+    const { app } = loadData({ table: mcpTable(INT) });
+    const res = await request(app).get("/api/mcp-url").set(adminBearer()).expect(200);
+    expect(res.body.clientSecret).toBe("mcp-sec");
+    expect(res.body.secretAdminOnly).toBe(false);
+  });
+
+  test.each([
+    ["no admin claim", {}],
+    ["admin false", { admin: false }],
+    ["admin as text", { admin: "true" }],
+    ["admin as number", { admin: 1 }],
+  ])("a user with %s gets the endpoint and client ID but no secret", async (_name, claims) => {
+    const { app } = loadData({ table: mcpTable(INT) });
+    const res = await request(app).get("/api/mcp-url").set(bearer(claims)).expect(200);
+    expect(res.body.url).toMatch(/\/mcp$/);
+    expect(res.body.clientId).toBe("mcp-id");
+    expect(res.body.accountManagerUrl).toBe(PUB);
+    expect(res.body.secretAdminOnly).toBe(true);
+    expect(res.body).not.toHaveProperty("clientSecret");
+    expect(res.text).not.toContain("mcp-sec");
+  });
+
+  test("the session cookie follows the same admin rule", async () => {
+    const { app } = loadData({ table: mcpTable(INT) });
+    const cookie = (claims) => `accessToken=${setupAndLogin(claims).accessToken}`;
+    const withParser = express().use(cookieParser()).use(app);
+    const user = await request(withParser).get("/api/mcp-url").set("Cookie", cookie()).expect(200);
+    expect(user.text).not.toContain("mcp-sec");
+    const admin = await request(withParser).get("/api/mcp-url").set("Cookie", cookie({ admin: true })).expect(200);
+    expect(admin.body.clientSecret).toBe("mcp-sec");
   });
 
   test("returns 401 without auth and makes no fetch", async () => {

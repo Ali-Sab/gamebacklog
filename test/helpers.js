@@ -27,9 +27,9 @@ function tmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "gamebacklog-test-"));
 }
 
-function setupAndLogin() {
+function setupAndLogin(claims = {}) {
   const accessToken = jwt.sign(
-    { sub: "tester", aud: "gamebacklog", iss: getTestIssuer() },
+    { sub: "tester", aud: "gamebacklog", iss: getTestIssuer(), ...claims },
     privateKey,
     { algorithm: "RS256", expiresIn: "1h" }
   );
