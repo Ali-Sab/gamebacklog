@@ -39,7 +39,9 @@ router.get("/mcp-url", requireAuth, async (req, res) => {
   res.json({
     url:               `${proto}://${host}/mcp`,
     clientId:          mcpClientId,
-    clientSecret:      mcpClientSecret,
+    // All users share this secret, so only the admin sees it.
+    ...(req.isAdmin ? { clientSecret: mcpClientSecret } : {}),
+    secretAdminOnly:   !req.isAdmin,
     accountManagerUrl: PUBLIC,
   });
 });

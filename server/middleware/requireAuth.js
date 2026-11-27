@@ -10,6 +10,7 @@ function requireAuth(req, res, next) {
   const payload = verifyAccess(token);
   if (!payload) return res.status(401).json({ error: "Invalid or expired token" });
   req.user = payload.sub;
+  req.isAdmin = payload.admin === true; // account-manager sets this for its admin only
   next();
 }
 

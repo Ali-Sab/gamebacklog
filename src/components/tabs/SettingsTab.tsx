@@ -14,7 +14,7 @@ export function SettingsTab({ theme, onThemeChange }: Props) {
   const { showToast } = useToast();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [mcpInfo, setMcpInfo] = useState<{ url: string; clientId: string; clientSecret: string; accountManagerUrl: string } | null>(null);
+  const [mcpInfo, setMcpInfo] = useState<{ url: string; clientId: string; clientSecret?: string; secretAdminOnly?: boolean; accountManagerUrl: string } | null>(null);
 
   useEffect(() => {
     api("GET", "/api/mcp-url").then((data) => { if (data.url) setMcpInfo(data); });
@@ -98,7 +98,11 @@ export function SettingsTab({ theme, onThemeChange }: Props) {
                   {key === "url" ? "MCP endpoint" : key === "clientId" ? "Client ID" : "Client Secret"}
                 </div>
                 <div style={{ fontFamily: "var(--mono)", fontSize: 12, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, padding: "6px 10px", wordBreak: "break-all", color: "var(--sub)", flex: 1 }}>
-                  {mcpInfo[key] || <span style={{ color: "var(--muted)" }}>not set</span>}
+                  {mcpInfo[key] || (
+                    <span style={{ color: "var(--muted)" }}>
+                      {key === "clientSecret" && mcpInfo.secretAdminOnly ? "Ask your admin for it" : "not set"}
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
