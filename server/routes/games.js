@@ -7,8 +7,8 @@ const { db, findGameById, insertGame, updateGame, deleteGameById } = require("..
 const requireAuth = require("../middleware/requireAuth");
 const { validateGameFields } = require("../lib/validation");
 
-function nextRankIn(category) {
-  const rows = db.prepare("SELECT MAX(rank) as m FROM games WHERE category = ?").get(category);
+function nextRankIn(username, category) {
+  const rows = db.prepare("SELECT MAX(rank) as m FROM games WHERE category = ? AND username = ?").get(category, username);
   return (rows?.m ?? 0) + 1;
 }
 
@@ -30,13 +30,13 @@ router.post("/games", requireAuth, (req, res) => {
     input:    fields.input    || null,
     imageUrl: fields.imageUrl || null,
   };
-  insertGame(game, "inbox");
+  insertGame(req.user, game, "inbox");
   res.json({ ok: true, game: { ...game, category: "inbox" } });
 });
 
 // Patch fields on an existing game. Only the supplied keys are touched.
 router.patch("/games/:id", requireAuth, (req, res) => {
-  const existing = findGameById(req.params.id);
+  const existing = findGameById(req.user, req.params.id);
   if (!existing) return res.status(404).json({ error: "Not found" });
   const patch = req.body || {};
   const err = validateGameFields(patch, { partial: true });
@@ -45,38 +45,38 @@ router.patch("/games/:id", requireAuth, (req, res) => {
   delete patch.category;
   delete patch.rank;
   if (patch.title) patch.title = patch.title.trim();
-  updateGame(req.params.id, patch);
-  res.json({ ok: true, game: findGameById(req.params.id) });
+  updateGame(req.user, req.params.id, patch);
+  res.json({ ok: true, game: findGameById(req.user, req.params.id) });
 });
 
 // Move a game to a different category. Always lands at the end (rank = max+1).
 router.post("/games/:id/move", requireAuth, (req, res) => {
-  const existing = findGameById(req.params.id);
+  const existing = findGameById(req.user, req.params.id);
   if (!existing) return res.status(404).json({ error: "Not found" });
   const { category } = req.body || {};
   if (typeof category !== "string") return res.status(400).json({ error: "category is required" });
   db.transaction(() => {
-    updateGame(req.params.id, { category, rank: nextRankIn(category) });
+    updateGame(req.user, req.params.id, { category, rank: nextRankIn(req.user, category) });
   })();
-  res.json({ ok: true, game: findGameById(req.params.id) });
+  res.json({ ok: true, game: findGameById(req.user, req.params.id) });
 });
 
 // Mark a game as played — moves to the played category and stamps the played date.
 router.post("/games/:id/played", requireAuth, (req, res) => {
-  const existing = findGameById(req.params.id);
+  const existing = findGameById(req.user, req.params.id);
   if (!existing) return res.status(404).json({ error: "Not found" });
   db.transaction(() => {
-    updateGame(req.params.id, {
+    updateGame(req.user, req.params.id, {
       category:   "played",
-      rank:       nextRankIn("played"),
+      rank:       nextRankIn(req.user, "played"),
       playedDate: new Date().toLocaleDateString(),
     });
   })();
-  res.json({ ok: true, game: findGameById(req.params.id) });
+  res.json({ ok: true, game: findGameById(req.user, req.params.id) });
 });
 
 router.delete("/games/:id", requireAuth, (req, res) => {
-  const ok = deleteGameById(req.params.id);
+  const ok = deleteGameById(req.user, req.params.id);
   if (!ok) return res.status(404).json({ error: "Not found" });
   res.json({ ok: true });
 });

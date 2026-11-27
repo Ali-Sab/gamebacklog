@@ -5,7 +5,7 @@ const router  = express.Router();
 const { db, readGames, writeGames, readProfile, writeProfile } = require("../db");
 const requireAuth = require("../middleware/requireAuth");
 
-const ACCOUNT_MANAGER_URL  = process.env.ACCOUNT_MANAGER_URL  || "http://localhost:3001";
+const { PUBLIC, INTERNAL } = require("../lib/accountManager");
 const OAUTH_CLIENT_ID      = process.env.OAUTH_CLIENT_ID      || process.env.GAMEBACKLOG_CLIENT_ID      || "";
 const OAUTH_CLIENT_SECRET  = process.env.OAUTH_CLIENT_SECRET  || process.env.GAMEBACKLOG_CLIENT_SECRET  || "";
 const OAUTH_REDIRECT_URI   = process.env.OAUTH_REDIRECT_URI   || process.env.GAMEBACKLOG_REDIRECT_URI   || "";
@@ -17,7 +17,7 @@ router.get("/mcp-url", requireAuth, async (req, res) => {
 
   let mcpClientId = "", mcpClientSecret = "";
   try {
-    const r = await fetch(`${ACCOUNT_MANAGER_URL}/api/mcp-client`, {
+    const r = await fetch(`${INTERNAL}/api/mcp-client`, {
       method: "POST",
       headers: {
         "Authorization": "Basic " + Buffer.from(`${OAUTH_CLIENT_ID}:${OAUTH_CLIENT_SECRET}`).toString("base64"),
@@ -29,28 +29,39 @@ router.get("/mcp-url", requireAuth, async (req, res) => {
       const data = await r.json();
       mcpClientId     = data.client_id     || "";
       mcpClientSecret = data.client_secret || "";
+    } else {
+      console.error("[mcp-url] /api/mcp-client failed:", r.status, await r.text().catch(() => ""));
     }
-  } catch { /* account-manager unreachable — leave blank */ }
+  } catch (e) {
+    console.error("[mcp-url] /api/mcp-client request error:", e);
+  }
 
   res.json({
     url:               `${proto}://${host}/mcp`,
     clientId:          mcpClientId,
-    clientSecret:      mcpClientSecret,
-    accountManagerUrl: ACCOUNT_MANAGER_URL,
+    // All users share this secret, so only the admin sees it.
+    ...(req.isAdmin ? { clientSecret: mcpClientSecret } : {}),
+    secretAdminOnly:   !req.isAdmin,
+    accountManagerUrl: PUBLIC,
   });
+});
+
+// Current authenticated user's identity
+router.get("/me", requireAuth, (req, res) => {
+  res.json({ username: req.user });
 });
 
 // Get all app data (games + profile)
 router.get("/data", requireAuth, (req, res) => {
-  const games   = readGames();
-  const profile = readProfile();
+  const games   = readGames(req.user);
+  const profile = readProfile(req.user);
   res.json({ games, profile });
 });
 
 // Export — downloads a JSON snapshot of games + profile
 router.get("/export", requireAuth, (req, res) => {
-  const games   = readGames();
-  const profile = readProfile();
+  const games   = readGames(req.user);
+  const profile = readProfile(req.user);
   const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="gamebacklog-${ts}.json"`);
@@ -72,8 +83,8 @@ router.post("/import", requireAuth, (req, res) => {
     return res.status(400).json({ error: "profile must be an array or null" });
   }
   db.transaction(() => {
-    writeGames(games);
-    writeProfile(profile ?? []);
+    writeGames(req.user, games);
+    writeProfile(req.user, profile ?? []);
   })();
   res.json({ ok: true });
 });
@@ -95,8 +106,8 @@ router.post("/data", requireAuth, (req, res) => {
     return res.status(400).json({ error: "profile must be an array" });
   }
   db.transaction(() => {
-    if (games   !== undefined) writeGames(games);
-    if (profile !== undefined) writeProfile(profile);
+    if (games   !== undefined) writeGames(req.user, games);
+    if (profile !== undefined) writeProfile(req.user, profile);
   })();
   res.json({ ok: true });
 });

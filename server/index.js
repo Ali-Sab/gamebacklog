@@ -2,7 +2,10 @@
 
 const { app } = require("./app");
 const { preloadPublicKey } = require("./lib/crypto");
+const { PUBLIC, INTERNAL } = require("./lib/accountManager");
 const PORT = process.env.PORT || 3000;
+
+console.log(`[startup] account-manager: public ${PUBLIC}, server-side ${INTERNAL}`);
 
 preloadPublicKey()
   .then(() => {
